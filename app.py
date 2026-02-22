@@ -6464,7 +6464,7 @@ elif st.session_state.page == "assistant axiora data":
     col11, col22, col33 = st.columns([0.1, 1, 0.1])
     with col22:
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel('gemini-2.5-flash')
 
         # Passer en mode large (full width)
         st.set_page_config(layout="wide")
