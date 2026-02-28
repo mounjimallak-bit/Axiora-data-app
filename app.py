@@ -6103,7 +6103,11 @@ elif st.session_state.page == "pauvrete":
 elif st.session_state.page == "Generateur Rapport & statistiques":
     st.markdown("<br>", unsafe_allow_html=True)
 
+<<<<<<< HEAD
     # ⚠️ idéalement set_page_config doit être au tout début du script
+=======
+ 
+>>>>>>> 08dd98acf5a3b4084c072b23ed38dbf52b4eeb6c
     st.set_page_config(layout="wide")
 
     st.markdown("""
