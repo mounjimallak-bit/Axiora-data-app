@@ -15,6 +15,9 @@ import os
 import geopandas as gpd
 import os
 import plotly.io as pio
+import matplotlib
+
+
 
 
 # --- Configuration page ---
@@ -260,14 +263,7 @@ if st.session_state.page == "Population":
 
     <div class="full-width-bar">
         <div class="bar-logo">Axiora Data</div>
-        <div class="bar-menu">
-            <a href="#">App Marketing Agency</a>
-            <a href="#">ASO Agency</a>
-            <a href="#">Glossary</a>
-            <a href="#">Data</a>
-            <a href="#">ASO Tools</a>
-            <a href="#" class="button">Read Blog</a>
-        </div>
+       
     </div>
 
     <div style="height: 60px;"></div>
@@ -1598,14 +1594,7 @@ elif st.session_state.page == "Marche de Travail":
 
         <div class="full-width-bar">
             <div class="bar-logo">Axiora Data</div>
-            <div class="bar-menu">
-                <a href="#">App Marketing Agency</a>
-                <a href="#">ASO Agency</a>
-                <a href="#">Glossary</a>
-                <a href="#">Data</a>
-                <a href="#">ASO Tools</a>
-                <a href="#" class="button">Read Blog</a>
-            </div>
+           
         </div>
 
         <div style="height: 60px;"></div>
@@ -3425,14 +3414,7 @@ elif st.session_state.page == "Habitat":
 
         <div class="full-width-bar">
             <div class="bar-logo">Axiora Data</div>
-            <div class="bar-menu">
-                <a href="#">App Marketing Agency</a>
-                <a href="#">ASO Agency</a>
-                <a href="#">Glossary</a>
-                <a href="#">Data</a>
-                <a href="#">ASO Tools</a>
-                <a href="#" class="button">Read Blog</a>
-            </div>
+            
         </div>
 
         <div style="height: 60px;"></div>
@@ -4120,14 +4102,7 @@ elif st.session_state.page == "Finance":
 
         <div class="full-width-bar">
             <div class="bar-logo">Axiora Data</div>
-            <div class="bar-menu">
-                <a href="#">App Marketing Agency</a>
-                <a href="#">ASO Agency</a>
-                <a href="#">Glossary</a>
-                <a href="#">Data</a>
-                <a href="#">ASO Tools</a>
-                <a href="#" class="button">Read Blog</a>
-            </div>
+           
         </div>
 
         <div style="height: 60px;"></div>
@@ -5018,14 +4993,7 @@ elif st.session_state.page == "Enseignement":
 
         <div class="full-width-bar">
             <div class="bar-logo">Axiora Data</div>
-            <div class="bar-menu">
-                <a href="#">App Marketing Agency</a>
-                <a href="#">ASO Agency</a>
-                <a href="#">Glossary</a>
-                <a href="#">Data</a>
-                <a href="#">ASO Tools</a>
-                <a href="#" class="button">Read Blog</a>
-            </div>
+           
         </div>
 
         <div style="height: 60px;"></div>
@@ -5773,14 +5741,7 @@ elif st.session_state.page == "pauvrete":
 
         <div class="full-width-bar">
             <div class="bar-logo">Axiora Data</div>
-            <div class="bar-menu">
-                <a href="#">App Marketing Agency</a>
-                <a href="#">ASO Agency</a>
-                <a href="#">Glossary</a>
-                <a href="#">Data</a>
-                <a href="#">ASO Tools</a>
-                <a href="#" class="button">Read Blog</a>
-            </div>
+          
         </div>
 
         <div style="height: 60px;"></div>
@@ -6784,14 +6745,7 @@ elif st.session_state.page == "assistant axiora data":
 
         <div class="full-width-bar">
             <div class="bar-logo">Axiora Data</div>
-            <div class="bar-menu">
-                <a href="#">App Marketing Agency</a>
-                <a href="#">ASO Agency</a>
-                <a href="#">Glossary</a>
-                <a href="#">Data</a>
-                <a href="#">ASO Tools</a>
-                <a href="#" class="button">Read Blog</a>
-            </div>
+           
         </div>
 
         <div style="height: 60px;"></div>
@@ -7002,14 +6956,7 @@ elif st.session_state.page == "Aide & contact":
 
         <div class="full-width-bar">
             <div class="bar-logo">Axiora Data</div>
-            <div class="bar-menu">
-                <a href="#">App Marketing Agency</a>
-                <a href="#">ASO Agency</a>
-                <a href="#">Glossary</a>
-                <a href="#">Data</a>
-                <a href="#">ASO Tools</a>
-                <a href="#" class="button">Read Blog</a>
-            </div>
+           
         </div>
 
         <div style="height: 60px;"></div>
@@ -7241,14 +7188,7 @@ else:
 
         <div class="full-width-bar">
             <div class="bar-logo">Axiora Data</div>
-            <div class="bar-menu">
-                <a href="#">App Marketing Agency</a>
-                <a href="#">ASO Agency</a>
-                <a href="#">Glossary</a>
-                <a href="#">Data</a>
-                <a href="#">ASO Tools</a>
-                <a href="#" class="button">Read Blog</a>
-            </div>
+          
         </div>
 
         <div style="height: 60px;"></div>
