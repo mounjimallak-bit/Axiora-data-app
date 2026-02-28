@@ -38,7 +38,7 @@ st.markdown("""
 section[data-testid="stSidebar"] {
     background-color: #1E293B; /* bleu foncé */
     color: white;
-    padding: 15px;
+    padding: 15px;F
 }
 .stButton>button {
     background-color: transparent;
@@ -6098,209 +6098,578 @@ elif st.session_state.page == "pauvrete":
             st.warning("Impossible de charger le shapefile. Vérifiez le chemin et réessayez.")
 ################ taaaaaaaabbbb 3
 
-elif st.session_state.page == "Generateur Rapport & statistiques":
 
+elif st.session_state.page == "Generateur Rapport & statistiques":
+    # =========================================================
+    # GÉNÉRATEUR UNIVERSEL DE RAPPORTS PDF (PRO)
+    # - Pas de prévision (uniquement analyse + comparaison + conclusion)
+    # - Table des matières professionnelle (avec numéros de pages)
+    # - Graphiques exportés via Matplotlib (stable sur Streamlit Cloud)
+    # - Fonctionne avec n'importe quel Excel (mapping colonnes génériques)
+    # =========================================================
+
+    import os
+    import re
+    import numpy as np
+    import pandas as pd
+    import streamlit as st
+    import plotly.express as px
+    import matplotlib.pyplot as plt
+
+    from fpdf import FPDF
+    from datetime import datetime
+
+    # -------------------------
+    # UI HEADER
+    # -------------------------
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("""
         <style>
         .block-container { padding: 0; margin: 0; max-width: 100%; }
-        .full-width-bar {
-            width: 100%;
-            background-color: #1E293B;
-            padding: 15px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-sizing: border-box;
+        .full-width-bar{
+            width:100%; background:#1E293B; padding:14px 18px;
+            display:flex; justify-content:space-between; align-items:center; box-sizing:border-box;
         }
-        .bar-logo {
-            font-family: 'Playfair Display', serif;
-            color: white;
-            font-size: 24px;
-            font-weight: 900;
-        }
-        .bar-menu {
-            display: flex;
-            gap: 10px;
-            max-width: 70%;
-            overflow-x: auto;
-        }
-        .bar-menu a {
-            color: white;
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: 600;
-            white-space: nowrap;
-        }
-        .bar-menu a:hover { color: #60A5FA; }
-        .bar-menu .button {
-            background-color: #3b82f6;
-            padding: 5px 10px;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: 600;
-        }
-        /* Expander style */
+        .bar-logo{ font-family:'Playfair Display',serif; color:white; font-size:22px; font-weight:900; }
+        .bar-tag{ color:#CBD5E1; font-size:13px; font-weight:600; }
+
         [data-testid="stExpander"] summary {
-            background-color: #1E293B !important;
-            color: white !important;
-            border-radius: 5px;
+            background-color:#1E293B !important; color:white !important; border-radius:6px;
+        }
+        [data-testid="stExpander"] .streamlit-expanderContent{
+            background:#FFFFFF; border:1px solid #E6EAF1; border-top:none;
+            border-radius:0 0 6px 6px; padding-top:16px;
         }
         </style>
 
         <div class="full-width-bar">
-            <div class="bar-logo">Axiora Data</div>
-            <div class="bar-menu">
-                <a href="#">Data Analysis</a>
-                <a href="#">Glossary</a>
-                <a href="#" class="button">Support</a>
+            <div>
+              <div class="bar-logo">Axiora Data</div>
+              <div class="bar-tag">Générateur de rapports PDF (analyse + comparaison + conclusion)</div>
             </div>
         </div>
-        <div style="height: 60px;"></div>
+        <div style="height: 14px;"></div>
     """, unsafe_allow_html=True)
 
-    col11, col22, col33 = st.columns([0.1, 1, 0.1])
-
+    col11, col22, col33 = st.columns([0.12, 1, 0.12])
     with col22:
-        # --- Fonctions utilitaires ---
-        def prepare_data_from_selection(df, region_col_idx, commune_col_idx, data_col_idx):
+
+        # =========================================================
+        # HELPERS (génériques)
+        # =========================================================
+        def safe_filename(s: str) -> str:
+            s = (s or "").strip().lower()
+            s = re.sub(r"[^a-z0-9_\-]+", "_", s)
+            s = re.sub(r"_+", "_", s).strip("_")
+            return s or "rapport"
+
+        def prepare_generic_data(df, group_idx, item_idx, value_idx):
+            """
+            Retour: df_clean avec colonnes Group, Item, Value
+            - Group : catégorie (ex: région, segment, produit, type...)
+            - Item  : élément (optionnel)
+            - Value : numérique
+            """
+            cols = [group_idx, value_idx] if item_idx is None else [group_idx, item_idx, value_idx]
+            df_selected = df.iloc[:, cols].copy()
+
+            if item_idx is None:
+                df_selected.columns = ["Group", "Value"]
+                df_selected["Item"] = df_selected["Group"].astype(str)
+            else:
+                df_selected.columns = ["Group", "Item", "Value"]
+
+            df_selected["Group"] = df_selected["Group"].astype(str).str.strip()
+            df_selected["Item"] = df_selected["Item"].astype(str).str.strip()
+            df_selected["Value"] = pd.to_numeric(df_selected["Value"], errors="coerce")
+
+            df_selected = df_selected.dropna(subset=["Group", "Item", "Value"])
+
+            # filtrage générique des totaux
+            summary_keywords = ["total", "ensemble", "all", "sum", "moyenne", "average", "subtotal"]
+            mask_summary = df_selected["Item"].str.lower().str.contains("|".join(summary_keywords), na=False)
+            df_selected = df_selected[~mask_summary].copy()
+
+            return df_selected
+
+        def fmt_num(x):
             try:
-                df_selected = df.iloc[:, [region_col_idx, commune_col_idx, data_col_idx]].copy()
-                df_selected.columns = ["Region", "Commune", "Data"]
-                df_selected["Region"] = df_selected["Region"].ffill()
-                df_selected["Data"] = pd.to_numeric(df_selected["Data"], errors="coerce")
+                x = float(x)
+                if abs(x) >= 1000:
+                    return f"{x:,.2f}".replace(",", " ")
+                return f"{x:.2f}"
+            except:
+                return str(x)
 
-                summary_keywords = ["Urbain", "Rural", "Ensemble", "Total", "Province", "Préfecture"]
-                df_cleaned = df_selected[
-                    ~df_selected["Commune"].astype(str).str.contains("|".join(summary_keywords), case=False, na=False)
-                ].copy()
+        def describe_table_str(series: pd.Series) -> str:
+            d = series.describe()
+            lines = []
+            for k in ["count", "mean", "std", "min", "25%", "50%", "75%", "max"]:
+                if k in d.index:
+                    lines.append(f"{k:>6} : {fmt_num(d[k])}")
+            return "\n".join(lines)
 
-                df_cleaned.dropna(inplace=True)
-                return df_cleaned
-            except Exception as e:
-                st.error(f"Erreur lors de la préparation des données : {e}")
-                return pd.DataFrame()
+        def group_summary_table(df_clean: pd.DataFrame) -> pd.DataFrame:
+            g = (
+                df_clean.groupby("Group")["Value"]
+                .agg(["count", "mean", "min", "max"])
+                .sort_values("mean", ascending=False)
+                .reset_index()
+            )
+            g["mean"] = g["mean"].round(2)
+            g["min"] = g["min"].round(2)
+            g["max"] = g["max"].round(2)
+            return g
 
+        def top_items_table(df_clean: pd.DataFrame, top_n=10) -> pd.DataFrame:
+            t = df_clean.sort_values("Value", ascending=False).head(top_n).copy()
+            t["Value"] = t["Value"].round(2)
+            return t[["Group", "Item", "Value"]]
 
-        def generate_ai_texts(df, objective):
-            max_row = df.loc[df["Data"].idxmax()]
-            return {
-                "abstract": f"Analyse pour {len(df)} localités. Point max : {max_row['Commune']} ({max_row['Data']:.2f}).",
-                "introduction": f"Objectif : {objective}.",
-                "data_description": "Données extraites du fichier Excel fourni.",
-                "methodology": "Statistiques descriptives et visualisation Plotly.",
-                "discussion": f"Hétérogénéité détectée, {max_row['Commune']} domine le classement.",
-                "conclusion": "Synthèse terminée. Recommandation : approfondir les zones à faible valeur."
-            }
+        def bottom_items_table(df_clean: pd.DataFrame, bottom_n=10) -> pd.DataFrame:
+            b = df_clean.sort_values("Value", ascending=True).head(bottom_n).copy()
+            b["Value"] = b["Value"].round(2)
+            return b[["Group", "Item", "Value"]]
 
+        # =========================================================
+        # CHARTS (Matplotlib -> PNG stable)
+        # =========================================================
+        def save_chart_top_items(df_clean: pd.DataFrame, out_path: str, top_n=20):
+            df_plot = df_clean.sort_values("Value", ascending=False).head(int(top_n)).copy()
+            if df_plot.empty:
+                return None
 
-        # --- Classe PDF ---
+            labels = [f"{it} ({gr})" for gr, it in zip(df_plot["Group"], df_plot["Item"])]
+
+            plt.figure(figsize=(12, 6))
+            plt.bar(range(len(df_plot)), df_plot["Value"].values)
+            plt.xticks(range(len(df_plot)), labels, rotation=65, ha="right", fontsize=8)
+            plt.title(f"Top {top_n} items (Value)")
+            plt.tight_layout()
+
+            os.makedirs(os.path.dirname(out_path), exist_ok=True)
+            plt.savefig(out_path, dpi=200)
+            plt.close()
+            return out_path
+
+        def save_chart_group_means(df_clean: pd.DataFrame, out_path: str, top_g=15):
+            df_g = group_summary_table(df_clean).head(int(top_g))
+            if df_g.empty:
+                return None
+
+            plt.figure(figsize=(10.5, 5.5))
+            plt.barh(df_g["Group"], df_g["mean"].values)
+            plt.gca().invert_yaxis()
+            plt.title(f"Moyenne par groupe (Top {top_g})")
+            plt.xlabel("Moyenne (Value)")
+            plt.tight_layout()
+
+            os.makedirs(os.path.dirname(out_path), exist_ok=True)
+            plt.savefig(out_path, dpi=200)
+            plt.close()
+            return out_path
+
+        # =========================================================
+        # PDF CLASS (TOC avec numéros de page)
+        # =========================================================
         class PDF(FPDF):
+            def __init__(self):
+                super().__init__()
+                self.toc = []  # [{"title":..., "page":...}]
+                self.set_auto_page_break(auto=True, margin=14)
+
             def header(self):
-                if hasattr(self, 'title'):
-                    self.set_font("Helvetica", "B", 12)
-                    self.cell(0, 10, self.title, 0, 1, "C")
-                    self.ln(5)
+                self.set_font("Helvetica", "B", 10)
+                self.set_text_color(80, 80, 80)
+                self.cell(0, 8, getattr(self, "title", ""), 0, 1, "R")
+                self.ln(1)
+                self.set_text_color(0, 0, 0)
 
             def footer(self):
-                self.set_y(-15)
+                self.set_y(-14)
                 self.set_font("Helvetica", "I", 8)
+                self.set_text_color(120, 120, 120)
                 self.cell(0, 10, f"Page {self.page_no()}", 0, 0, "C")
+                self.set_text_color(0, 0, 0)
 
-            def chapter_title(self, title):
-                self.set_font("Helvetica", "B", 14)
-                self.cell(0, 10, title, 0, 1, "L")
-                self.ln(5)
+            def safe(self, s):
+                return (s or "").encode("latin-1", "replace").decode("latin-1")
 
-            def chapter_body(self, body):
-                self.set_font("Helvetica", "", 12)
-                body = body.encode("latin-1", "replace").decode("latin-1")
-                self.multi_cell(0, 10, body)
-                self.ln()
+            def h1(self, text):
+                self.set_font("Helvetica", "B", 16)
+                self.multi_cell(0, 8, self.safe(text))
+                self.ln(1)
 
+            def h2(self, text):
+                self.set_font("Helvetica", "B", 12)
+                self.multi_cell(0, 6.5, self.safe(text))
+                self.ln(1)
 
-        def create_pdf_report(report_data):
+            def p(self, text):
+                self.set_font("Helvetica", "", 11)
+                self.multi_cell(0, 6, self.safe(text))
+                self.ln(1)
+
+            def bullets(self, items):
+                self.set_font("Helvetica", "", 11)
+                for it in items:
+                    self.multi_cell(0, 6, self.safe(f"• {it}"))
+                self.ln(1)
+
+            def codeblock(self, text):
+                self.set_font("Courier", "", 8)
+                text = self.safe(text)
+                self.multi_cell(0, 4.5, text)
+                self.set_font("Helvetica", "", 11)
+                self.ln(1)
+
+            def add_image(self, path, width=180):
+                if path and os.path.exists(path):
+                    self.image(path, w=width)
+                    self.ln(4)
+
+            def add_toc_entry(self, title):
+                self.toc.append({"title": title, "page": self.page_no()})
+
+        def df_to_text_table(df: pd.DataFrame, max_rows=40) -> str:
+            df2 = df.copy()
+            if len(df2) > max_rows:
+                df2 = df2.head(max_rows)
+            return df2.to_string(index=False)
+
+        # =========================================================
+        # REPORT CONTENT (structure pro)
+        # =========================================================
+        def build_report_sections(df_clean, objective, top_n_items=10, top_n_chart=20, top_g_chart=15):
+            # Stats globales
+            n_rows = len(df_clean)
+            n_groups = df_clean["Group"].nunique()
+            n_items = df_clean["Item"].nunique()
+
+            max_row = df_clean.loc[df_clean["Value"].idxmax()]
+            min_row = df_clean.loc[df_clean["Value"].idxmin()]
+            mean_val = float(df_clean["Value"].mean())
+            std_val = float(df_clean["Value"].std()) if n_rows > 1 else 0.0
+
+            # Tables
+            group_tab = group_summary_table(df_clean)
+            top_tab = top_items_table(df_clean, top_n=top_n_items)
+            bottom_tab = bottom_items_table(df_clean, bottom_n=top_n_items)
+
+            # Insights simples (génériques)
+            gap = float(max_row["Value"] - min_row["Value"])
+            dispersion = "faible" if std_val < (0.1 * abs(mean_val) + 1e-9) else "marquée"
+            best_group = group_tab.iloc[0]["Group"] if not group_tab.empty else "N/A"
+
+            executive_summary = (
+                f"Objectif : {objective}\n"
+                f"Données analysées : {n_rows} lignes, {n_groups} groupes, {n_items} items.\n"
+                f"Max : {max_row['Item']} ({max_row['Group']}) = {fmt_num(max_row['Value'])} | "
+                f"Min : {min_row['Item']} ({min_row['Group']}) = {fmt_num(min_row['Value'])}\n"
+                f"Moyenne : {fmt_num(mean_val)} | Écart-type : {fmt_num(std_val)} | Écart max-min : {fmt_num(gap)}\n"
+                f"Groupe le plus performant (moyenne) : {best_group}"
+            )
+
+            sections = [
+                {
+                    "title": "1. Contexte & Objectif",
+                    "body": (
+                        "Ce rapport est généré automatiquement à partir d’un fichier Excel fourni par l’utilisateur. "
+                        "Le contenu est construit dynamiquement selon les colonnes sélectionnées (Groupe / Élément / Valeur)."
+                    ),
+                    "bullets": [
+                        f"Objectif : {objective}",
+                        "Approche : nettoyage + statistiques descriptives + comparaisons",
+                        "Sorties : tableaux synthèse + graphiques + conclusion"
+                    ],
+                },
+                {
+                    "title": "2. Données & Nettoyage",
+                    "body": (
+                        "Le pipeline standardise les colonnes en (Group, Item, Value). "
+                        "La colonne Value est convertie en numérique et les lignes non exploitables sont supprimées. "
+                        "Les lignes de type total/ensemble (si présentes) sont ignorées."
+                    ),
+                    "bullets": [
+                        f"Lignes conservées : {n_rows}",
+                        f"Groupes uniques : {n_groups}",
+                        f"Items uniques : {n_items}",
+                    ],
+                },
+                {
+                    "title": "3. Analyse Descriptive",
+                    "body": "Statistiques de base calculées sur la colonne Value :",
+                    "table": describe_table_str(df_clean["Value"]),
+                },
+                {
+                    "title": "4. Comparaison entre groupes",
+                    "body": (
+                        "Synthèse par groupe : nombre d’observations, moyenne, min et max. "
+                        "Cette section sert à comparer rapidement les catégories (Group) sur l’indicateur (Value)."
+                    ),
+                    "table": df_to_text_table(group_tab, max_rows=40),
+                },
+                {
+                    "title": "5. Items extrêmes (Top / Bottom)",
+                    "body": (
+                        "Liste des items les plus élevés et les plus faibles. "
+                        "Utile pour identifier rapidement les zones/segments/produits dominants ou en retard."
+                    ),
+                    "bullets": [
+                        "Top : items à forte valeur (priorités / points forts).",
+                        "Bottom : items à faible valeur (zones à investiguer / points faibles)."
+                    ],
+                    "table": "TOP (valeurs les plus élevées)\n"
+                             + df_to_text_table(top_tab, max_rows=top_n_items)
+                             + "\n\nBOTTOM (valeurs les plus faibles)\n"
+                             + df_to_text_table(bottom_tab, max_rows=top_n_items),
+                },
+                {
+                    "title": "6. Synthèse & Conclusion",
+                    "body": (
+                        "Conclusion basée sur les constats descriptifs et comparatifs. "
+                        "Elle indique où se situent les écarts et comment exploiter ces résultats."
+                    ),
+                    "bullets": [
+                        f"Hétérogénéité : dispersion {dispersion} (écart-type vs moyenne).",
+                        f"Écart max-min : {fmt_num(gap)} → amplitude des différences à expliquer.",
+                        f"Groupe leader (moyenne) : {best_group} → benchmark.",
+                        "Recommandation : compléter avec des variables explicatives (contexte, ressources, profils) pour interpréter les écarts.",
+                    ],
+                },
+            ]
+
+            # Graphiques à intégrer au PDF (paths calculés ailleurs)
+            charts_meta = {
+                "top_items_chart_n": int(top_n_chart),
+                "top_groups_chart_n": int(top_g_chart),
+                "executive_summary": executive_summary
+            }
+            return sections, charts_meta
+
+        # =========================================================
+        # PDF REPORT CREATION (TOC avec pages)
+        # =========================================================
+        def create_pdf_report(report_title, author, organization, objective, df_clean, charts_paths, sections, executive_summary):
+            """
+            charts_paths = {"top_items": "...png", "group_means": "...png"}
+            """
             pdf = PDF()
-            pdf.title = report_data["title"]
+            pdf.title = report_title
+
+            # --- Cover ---
             pdf.add_page()
-            # Page de garde
-            pdf.set_font("Helvetica", "B", 24)
-            pdf.multi_cell(0, 20, report_data["title"], 0, "C")
-            pdf.ln(20)
-            pdf.set_font("Helvetica", "", 12)
-            pdf.cell(0, 10, f"Auteur: {report_data['author']}", 0, 1, "C")
-            pdf.cell(0, 10, f"Date: {datetime.now().strftime('%d/%m/%Y')}", 0, 1, "C")
+            pdf.set_font("Helvetica", "B", 26)
+            pdf.multi_cell(0, 12, pdf.safe(report_title), 0, "C")
+            pdf.ln(6)
 
+            pdf.set_font("Helvetica", "", 13)
+            pdf.multi_cell(0, 7, pdf.safe(f"Auteur : {author}"), 0, "C")
+            pdf.multi_cell(0, 7, pdf.safe(f"Organisation : {organization}"), 0, "C")
+            pdf.multi_cell(0, 7, pdf.safe(f"Date : {datetime.now().strftime('%d/%m/%Y')}"), 0, "C")
+            pdf.ln(10)
+
+            pdf.h2("Executive Summary")
+            pdf.codeblock(executive_summary)
+
+            # --- Table des matières placeholder ---
             pdf.add_page()
-            for section in report_data["sections"]:
-                pdf.chapter_title(section["title"])
-                if section.get("body"):
-                    pdf.chapter_body(section["body"])
-                if section.get("table"):
-                    pdf.set_font("Courier", "", 8)
-                    pdf.multi_cell(0, 5, section["table"].encode("latin-1", "replace").decode("latin-1"))
-                    pdf.ln()
+            toc_page = pdf.page_no()
+            pdf.h1("Table des matières")
+            pdf.p("Génération en cours...")
 
-            return pdf.output(dest="S").encode("latin-1")
+            # --- Content sections ---
+            for sec in sections:
+                pdf.add_page()
+                pdf.add_toc_entry(sec["title"])
 
+                pdf.h1(sec["title"])
+                if sec.get("body"):
+                    pdf.p(sec["body"])
+                if sec.get("bullets"):
+                    pdf.bullets(sec["bullets"])
+                if sec.get("table"):
+                    pdf.h2("Table / Résultats")
+                    pdf.codeblock(sec["table"])
 
-        # --- Interface ---
-        st.markdown("<h4 style='text-align: center;'>Générateur de Rapport Universel</h4>", unsafe_allow_html=True)
+                # Insertion de figures dans les sections pertinentes (propre)
+                if sec["title"].startswith("4.") and charts_paths.get("group_means"):
+                    pdf.h2("Figure — Moyennes par groupe")
+                    pdf.add_image(charts_paths["group_means"], width=180)
 
-        with st.expander("Étape 1 : Informations", expanded=True):
-            report_title = st.text_input("Titre", "Analyse de Données Souss-Massa")
-            author_name = st.text_input("Auteur", "Lamya Morchide")
-            objective = st.text_area("Objectif", "Analyser les indicateurs régionaux.")
+                if sec["title"].startswith("5.") and charts_paths.get("top_items"):
+                    pdf.h2("Figure — Top items")
+                    pdf.add_image(charts_paths["top_items"], width=180)
 
-        with st.expander("Étape 2 : Chargement", expanded=True):
-            uploaded_file = st.file_uploader("Fichier Excel", type=["xlsx"])
-            if uploaded_file:
+            # --- Rebuild TOC with page numbers ---
+            # Sauvegarde le contenu actuel dans une string, puis on re-génère proprement
+            # Astuce FPDF: on ne peut pas modifier une page déjà écrite facilement,
+            # donc on régénère un 2e PDF final avec TOC correcte.
+            final_pdf = PDF()
+            final_pdf.title = report_title
+
+            # Cover
+            final_pdf.add_page()
+            final_pdf.set_font("Helvetica", "B", 26)
+            final_pdf.multi_cell(0, 12, final_pdf.safe(report_title), 0, "C")
+            final_pdf.ln(6)
+
+            final_pdf.set_font("Helvetica", "", 13)
+            final_pdf.multi_cell(0, 7, final_pdf.safe(f"Auteur : {author}"), 0, "C")
+            final_pdf.multi_cell(0, 7, final_pdf.safe(f"Organisation : {organization}"), 0, "C")
+            final_pdf.multi_cell(0, 7, final_pdf.safe(f"Date : {datetime.now().strftime('%d/%m/%Y')}"), 0, "C")
+            final_pdf.ln(10)
+
+            final_pdf.h2("Executive Summary")
+            final_pdf.codeblock(executive_summary)
+
+            # TOC correct
+            final_pdf.add_page()
+            final_pdf.h1("Table des matières")
+
+            final_pdf.set_font("Helvetica", "", 11)
+            for entry in pdf.toc:
+                # format: Title .......... page
+                title = entry["title"]
+                page = entry["page"]  # pages in pdf (cover + toc placeholder + content)
+                # On doit recalculer car final_pdf a 2 pages (cover+toc) avant contenu,
+                # alors que pdf avait cover + toc placeholder = 2 pages aussi. Même offset => OK.
+                dots = "." * max(2, 70 - len(title))
+                final_pdf.cell(0, 7, final_pdf.safe(f"{title} {dots} {page}"), 0, 1)
+
+            # Content sections (replay)
+            for sec in sections:
+                final_pdf.add_page()
+                final_pdf.h1(sec["title"])
+
+                if sec.get("body"):
+                    final_pdf.p(sec["body"])
+                if sec.get("bullets"):
+                    final_pdf.bullets(sec["bullets"])
+                if sec.get("table"):
+                    final_pdf.h2("Table / Résultats")
+                    final_pdf.codeblock(sec["table"])
+
+                if sec["title"].startswith("4.") and charts_paths.get("group_means"):
+                    final_pdf.h2("Figure — Moyennes par groupe")
+                    final_pdf.add_image(charts_paths["group_means"], width=180)
+
+                if sec["title"].startswith("5.") and charts_paths.get("top_items"):
+                    final_pdf.h2("Figure — Top items")
+                    final_pdf.add_image(charts_paths["top_items"], width=180)
+
+            return final_pdf.output(dest="S").encode("latin-1")
+
+        # =========================================================
+        # UI
+        # =========================================================
+        st.markdown("<h4 style='text-align:center;'>Générateur de Rapport Universel</h4>", unsafe_allow_html=True)
+
+        with st.expander("Étape 1 : Informations du rapport", expanded=True):
+            c1, c2 = st.columns(2)
+            with c1:
+                report_title = st.text_input("Titre du rapport", "Analyse de Données")
+                author_name = st.text_input("Auteur(s)", "Généré automatiquement")
+            with c2:
+                organization = st.text_input("Organisation", "")
+                objective = st.text_area("Objectif de l'étude", "Analyser la répartition d'un indicateur clé.")
+
+        with st.expander("Étape 2 : Charger le fichier + mapping des colonnes", expanded=True):
+            uploaded_file = st.file_uploader("Chargez votre fichier Excel", type=["xlsx"], label_visibility="collapsed")
+
+            df_raw = None
+            group_idx = item_idx = value_idx = None
+
+            if uploaded_file is not None:
                 df_raw = pd.read_excel(uploaded_file, header=None)
-                st.dataframe(df_raw.head())
-                col_options = [f"Col {i}" for i in range(len(df_raw.columns))]
-                c1, c2, c3 = st.columns(3)
-                region_col = c1.selectbox("Regroupement", col_options, index=0)
-                commune_col = c2.selectbox("Localités", col_options, index=1)
-                data_col = c3.selectbox("Données", col_options, index=2)
+                st.markdown("**Aperçu (5 lignes) :**")
+                st.dataframe(df_raw.head(5), use_container_width=True)
 
-                region_idx = col_options.index(region_col)
-                commune_idx = col_options.index(commune_col)
-                data_idx = col_options.index(data_col)
+                col_options = [f"Colonne {i}" for i in range(len(df_raw.columns))]
+                m1, m2, m3 = st.columns(3)
+
+                with m1:
+                    group_col = st.selectbox("Colonne Groupe (catégorie)", col_options, index=0)
+                with m2:
+                    item_col = st.selectbox("Colonne Élément (optionnelle)", ["Aucune"] + col_options, index=0)
+                with m3:
+                    value_col = st.selectbox("Colonne Valeur (numérique)", col_options, index=1 if len(col_options) > 1 else 0)
+
+                group_idx = col_options.index(group_col)
+                value_idx = col_options.index(value_col)
+                item_idx = None if item_col == "Aucune" else col_options.index(item_col)
+
+        with st.expander("Étape 3 : Générer le PDF (analyse uniquement)", expanded=True):
+            if df_raw is None:
+                st.info("Veuillez charger un fichier Excel pour activer la génération du rapport.")
             else:
-                df_raw = None
+                top_n_items = st.slider("Top / Bottom (table)", 5, 30, 10, step=1)
+                top_n_chart = st.slider("Top N (graphique items)", 10, 50, 20, step=5)
+                top_g_chart = st.slider("Top groupes (graphique moyennes)", 5, 30, 15, step=5)
 
-        with st.expander("Étape 3 : Génération", expanded=True):
-            if df_raw is not None:
-                if st.button("Lancer l'Analyse", type="primary", use_container_width=True):
-                    df_cleaned = prepare_data_from_selection(df_raw, region_idx, commune_idx, data_idx)
-                    if not df_cleaned.empty:
-                        ai_texts = generate_ai_texts(df_cleaned, objective)
-                        fig = px.bar(df_cleaned, x="Commune", y="Data", color="Region", title=report_title)
-                        st.plotly_chart(fig, use_container_width=True)
+                if st.button("Créer le PDF", type="primary", use_container_width=True):
+                    with st.spinner("Nettoyage, analyse, comparaison et génération du PDF..."):
 
-                        report_sections = [
-                            {"title": "Introduction", "body": ai_texts["introduction"]},
-                            {"title": "Analyse", "body": ai_texts["abstract"]},
-                            {"title": "Statistiques", "table": df_cleaned.describe().to_string()}
-                        ]
+                        df_clean = prepare_generic_data(df_raw, group_idx, item_idx, value_idx)
 
-                        pdf_bytes = create_pdf_report({
-                            "title": report_title,
-                            "author": author_name,
-                            "sections": report_sections
-                        })
-                        st.session_state.pdf_bytes = pdf_bytes
-                        st.success("Rapport prêt !")
-            else:
-                st.info("Veuillez charger un fichier.")
+                        if df_clean.empty:
+                            st.error("Impossible d'analyser : vérifiez vos colonnes (valeur numérique requise).")
+                        else:
+                            # Aperçu UI
+                            st.success("Données nettoyées (aperçu) :")
+                            st.dataframe(df_clean.head(10), use_container_width=True)
 
+                            # Graph UI (Plotly)
+                            fig_ui = px.bar(
+                                df_clean.sort_values("Value", ascending=False).head(int(top_n_chart)),
+                                x="Item",
+                                y="Value",
+                                color="Group",
+                                title=f"Top {top_n_chart} items (Value)"
+                            )
+                            st.plotly_chart(fig_ui, use_container_width=True)
+
+                            # Export charts for PDF
+                            os.makedirs("temp_plots", exist_ok=True)
+                            p_top_items = save_chart_top_items(df_clean, "temp_plots/top_items.png", top_n=top_n_chart)
+                            p_group_means = save_chart_group_means(df_clean, "temp_plots/group_means.png", top_g=top_g_chart)
+
+                            sections, meta = build_report_sections(
+                                df_clean=df_clean,
+                                objective=objective,
+                                top_n_items=top_n_items,
+                                top_n_chart=top_n_chart,
+                                top_g_chart=top_g_chart
+                            )
+
+                            charts_paths = {"top_items": p_top_items, "group_means": p_group_means}
+
+                            pdf_bytes = create_pdf_report(
+                                report_title=report_title,
+                                author=author_name,
+                                organization=organization,
+                                objective=objective,
+                                df_clean=df_clean,
+                                charts_paths=charts_paths,
+                                sections=sections,
+                                executive_summary=meta["executive_summary"]
+                            )
+
+                            st.session_state.pdf_bytes = pdf_bytes
+                            st.session_state.report_title = report_title
+                            st.success("PDF généré avec succès !")
+
+        # Download
         if "pdf_bytes" in st.session_state:
-            st.download_button("⬇ Télécharger le PDF", st.session_state.pdf_bytes, "rapport.pdf", "application/pdf")
-
-
-
-
-
+            fname = safe_filename(st.session_state.get("report_title", "rapport"))
+            ts = datetime.now().strftime("%Y%m%d_%H%M")
+            st.download_button(
+                label="⬇ Télécharger le Rapport PDF",
+                data=st.session_state.pdf_bytes,
+                file_name=f"{fname}_{ts}.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
 
 
 
@@ -7286,6 +7655,7 @@ else:
                 width: 1200px;
                 display: flex;
                 flex-wrap: nowrap;
+
                 justify-content: flex-start;
                 position: relative;
                 left: 70px;  /* texte principal reste décalé de 7 cm à droite */
