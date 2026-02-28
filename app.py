@@ -6098,22 +6098,12 @@ elif st.session_state.page == "pauvrete":
             st.warning("Impossible de charger le shapefile. Vérifiez le chemin et réessayez.")
 ################ taaaaaaaabbbb 3
 
-
-
 elif st.session_state.page == "Generateur Rapport & statistiques":
+
     st.markdown("<br>", unsafe_allow_html=True)
-
-<<<<<<< HEAD
-    # ⚠️ idéalement set_page_config doit être au tout début du script
-=======
- 
->>>>>>> 08dd98acf5a3b4084c072b23ed38dbf52b4eeb6c
-    st.set_page_config(layout="wide")
-
     st.markdown("""
         <style>
         .block-container { padding: 0; margin: 0; max-width: 100%; }
-
         .full-width-bar {
             width: 100%;
             background-color: #1E293B;
@@ -6123,21 +6113,18 @@ elif st.session_state.page == "Generateur Rapport & statistiques":
             align-items: center;
             box-sizing: border-box;
         }
-
         .bar-logo {
             font-family: 'Playfair Display', serif;
             color: white;
             font-size: 24px;
             font-weight: 900;
         }
-
         .bar-menu {
             display: flex;
             gap: 10px;
             max-width: 70%;
             overflow-x: auto;
         }
-
         .bar-menu a {
             color: white;
             text-decoration: none;
@@ -6145,9 +6132,7 @@ elif st.session_state.page == "Generateur Rapport & statistiques":
             font-weight: 600;
             white-space: nowrap;
         }
-
         .bar-menu a:hover { color: #60A5FA; }
-
         .bar-menu .button {
             background-color: #3b82f6;
             padding: 5px 10px;
@@ -6155,91 +6140,67 @@ elif st.session_state.page == "Generateur Rapport & statistiques":
             font-size: 14px;
             font-weight: 600;
         }
-
-        .bar-menu .button:hover { background-color: #2563eb; }
-
         /* Expander style */
         [data-testid="stExpander"] summary {
             background-color: #1E293B !important;
             color: white !important;
             border-radius: 5px;
         }
-
-        [data-testid="stExpander"] .streamlit-expanderContent {
-            background-color: #FFFFFF;
-            border: 1px solid #E6EAF1;
-            border-top: none;
-            border-radius: 0 0 5px 5px;
-            padding-top: 20px;
-        }
         </style>
 
         <div class="full-width-bar">
             <div class="bar-logo">Axiora Data</div>
             <div class="bar-menu">
-                <a href="#">App Marketing Agency</a>
-                <a href="#">ASO Agency</a>
+                <a href="#">Data Analysis</a>
                 <a href="#">Glossary</a>
-                <a href="#">Data</a>
-                <a href="#">ASO Tools</a>
-                <a href="#" class="button">Read Blog</a>
+                <a href="#" class="button">Support</a>
             </div>
         </div>
-
         <div style="height: 60px;"></div>
     """, unsafe_allow_html=True)
 
     col11, col22, col33 = st.columns([0.1, 1, 0.1])
 
     with col22:
-
-       
+        # --- Fonctions utilitaires ---
         def prepare_data_from_selection(df, region_col_idx, commune_col_idx, data_col_idx):
-            df_selected = df.iloc[:, [region_col_idx, commune_col_idx, data_col_idx]].copy()
-            df_selected.columns = ["Region", "Commune", "Data"]
-            df_selected["Region"] = df_selected["Region"].ffill()
-            df_selected["Data"] = pd.to_numeric(df_selected["Data"], errors="coerce")
+            try:
+                df_selected = df.iloc[:, [region_col_idx, commune_col_idx, data_col_idx]].copy()
+                df_selected.columns = ["Region", "Commune", "Data"]
+                df_selected["Region"] = df_selected["Region"].ffill()
+                df_selected["Data"] = pd.to_numeric(df_selected["Data"], errors="coerce")
 
-            summary_keywords = ["Urbain", "Rural", "Ensemble", "Total", "Province", "Préfecture"]
-            df_cleaned = df_selected[
-                ~df_selected["Commune"].astype(str).str.contains("|".join(summary_keywords), case=False, na=False)
-            ].copy()
+                summary_keywords = ["Urbain", "Rural", "Ensemble", "Total", "Province", "Préfecture"]
+                df_cleaned = df_selected[
+                    ~df_selected["Commune"].astype(str).str.contains("|".join(summary_keywords), case=False, na=False)
+                ].copy()
 
-            df_cleaned.dropna(inplace=True)
-            return df_cleaned
+                df_cleaned.dropna(inplace=True)
+                return df_cleaned
+            except Exception as e:
+                st.error(f"Erreur lors de la préparation des données : {e}")
+                return pd.DataFrame()
 
 
         def generate_ai_texts(df, objective):
             max_row = df.loc[df["Data"].idxmax()]
             return {
-                "abstract": (
-                    f"Ce rapport analyse la variable 'Data' pour {len(df)} localités, avec pour objectif : {objective}. "
-                    f"La localité '{max_row['Commune']}' dans la région '{max_row['Region']}' présente la valeur la plus élevée "
-                    f"({max_row['Data']:.2f})."
-                ),
-                "introduction": (
-                    f"L'objectif de cette étude est de : {objective}. "
-                    "Ce rapport explore un jeu de données pour quantifier et visualiser la répartition d'un indicateur clé."
-                ),
-                "data_description": "Les données proviennent d'un fichier Excel fourni, puis ont été nettoyées et structurées.",
-                "methodology": "Analyse descriptive : statistiques de base + diagramme en barres. Outils : Streamlit, Pandas, Plotly.",
-                "discussion": (
-                    f"Les résultats montrent une hétérogénéité marquée, avec '{max_row['Commune']}' comme point saillant. "
-                    "Limites : analyse descriptive et données limitées au fichier source."
-                ),
-                "conclusion": (
-                    f"En réponse à l'objectif '{objective}', l'étude a synthétisé la répartition de l'indicateur. "
-                    "Recommandation : enrichir l'analyse avec des données contextuelles."
-                ),
+                "abstract": f"Analyse pour {len(df)} localités. Point max : {max_row['Commune']} ({max_row['Data']:.2f}).",
+                "introduction": f"Objectif : {objective}.",
+                "data_description": "Données extraites du fichier Excel fourni.",
+                "methodology": "Statistiques descriptives et visualisation Plotly.",
+                "discussion": f"Hétérogénéité détectée, {max_row['Commune']} domine le classement.",
+                "conclusion": "Synthèse terminée. Recommandation : approfondir les zones à faible valeur."
             }
 
 
-       
+        # --- Classe PDF ---
         class PDF(FPDF):
             def header(self):
-                self.set_font("Helvetica", "B", 12)
-                self.cell(0, 10, self.title, 0, 1, "C")
-                self.ln(5)
+                if hasattr(self, 'title'):
+                    self.set_font("Helvetica", "B", 12)
+                    self.cell(0, 10, self.title, 0, 1, "C")
+                    self.ln(5)
 
             def footer(self):
                 self.set_y(-15)
@@ -6249,7 +6210,6 @@ elif st.session_state.page == "Generateur Rapport & statistiques":
             def chapter_title(self, title):
                 self.set_font("Helvetica", "B", 14)
                 self.cell(0, 10, title, 0, 1, "L")
-                self.line(self.get_x(), self.get_y(), self.get_x() + 190, self.get_y())
                 self.ln(5)
 
             def chapter_body(self, body):
@@ -6258,173 +6218,84 @@ elif st.session_state.page == "Generateur Rapport & statistiques":
                 self.multi_cell(0, 10, body)
                 self.ln()
 
-            def add_plot(self, plot_path, width=180):
-                if plot_path and os.path.exists(plot_path):
-                    self.image(plot_path, w=width)
-
-            def add_table(self, table_str):
-                self.set_font("Courier", "", 8)
-                table_str = table_str.encode("latin-1", "replace").decode("latin-1")
-                self.multi_cell(0, 5, table_str)
-                self.set_font("Helvetica", "", 12)
-                self.ln()
-
 
         def create_pdf_report(report_data):
             pdf = PDF()
             pdf.title = report_data["title"]
-
             pdf.add_page()
-            pdf.set_font("Helvetica", "B", 28)
+            # Page de garde
+            pdf.set_font("Helvetica", "B", 24)
             pdf.multi_cell(0, 20, report_data["title"], 0, "C")
-            pdf.ln(30)
-
-            pdf.set_font("Helvetica", "", 16)
+            pdf.ln(20)
+            pdf.set_font("Helvetica", "", 12)
             pdf.cell(0, 10, f"Auteur: {report_data['author']}", 0, 1, "C")
-            pdf.cell(0, 10, f"Organisation: {report_data['organization']}", 0, 1, "C")
             pdf.cell(0, 10, f"Date: {datetime.now().strftime('%d/%m/%Y')}", 0, 1, "C")
 
             pdf.add_page()
-
             for section in report_data["sections"]:
                 pdf.chapter_title(section["title"])
-
                 if section.get("body"):
                     pdf.chapter_body(section["body"])
-
                 if section.get("table"):
-                    pdf.add_table(section["table"])
-
-                if section.get("plot_path"):
-                    pdf.add_plot(section["plot_path"])
+                    pdf.set_font("Courier", "", 8)
+                    pdf.multi_cell(0, 5, section["table"].encode("latin-1", "replace").decode("latin-1"))
+                    pdf.ln()
 
             return pdf.output(dest="S").encode("latin-1")
 
 
-       
+        # --- Interface ---
         st.markdown("<h4 style='text-align: center;'>Générateur de Rapport Universel</h4>", unsafe_allow_html=True)
 
-        # Étape 1
-        with st.expander("Étape 1 : Renseignez les informations du rapport", expanded=True):
-            col1, col2 = st.columns(2)
-            with col1:
-                report_title = st.text_input("Titre du rapport", "Analyse de Données")
-                author_name = st.text_input("Auteur(s)", "Généré par l'IA")
-            with col2:
-                organization = st.text_input("Organisation", "")
-                objective = st.text_area("Objectif de l'étude", "Analyser la répartition d'un indicateur clé.")
+        with st.expander("Étape 1 : Informations", expanded=True):
+            report_title = st.text_input("Titre", "Analyse de Données Souss-Massa")
+            author_name = st.text_input("Auteur", "Lamya Morchide")
+            objective = st.text_area("Objectif", "Analyser les indicateurs régionaux.")
 
-        # Étape 2
-        with st.expander("Étape 2 : Chargez votre fichier et guidez l'analyse", expanded=True):
-            uploaded_file = st.file_uploader("Chargez votre fichier Excel", type=["xlsx"], label_visibility="collapsed")
-
-            if uploaded_file is not None:
+        with st.expander("Étape 2 : Chargement", expanded=True):
+            uploaded_file = st.file_uploader("Fichier Excel", type=["xlsx"])
+            if uploaded_file:
                 df_raw = pd.read_excel(uploaded_file, header=None)
-                st.markdown("**Aperçu de vos données brutes :**")
                 st.dataframe(df_raw.head())
-
-                st.markdown("**Veuillez identifier vos colonnes :**")
-                col_options = [f"Colonne {i}" for i in range(len(df_raw.columns))]
-
+                col_options = [f"Col {i}" for i in range(len(df_raw.columns))]
                 c1, c2, c3 = st.columns(3)
-                with c1:
-                    region_col = st.selectbox("Colonne de regroupement (ex: Province)", col_options, index=0)
-                with c2:
-                    commune_col = st.selectbox("Colonne des localités (ex: Commune)", col_options, index=1)
-                with c3:
-                    data_col = st.selectbox("Colonne des données numériques", col_options, index=2)
+                region_col = c1.selectbox("Regroupement", col_options, index=0)
+                commune_col = c2.selectbox("Localités", col_options, index=1)
+                data_col = c3.selectbox("Données", col_options, index=2)
 
-                region_col_idx = col_options.index(region_col)
-                commune_col_idx = col_options.index(commune_col)
-                data_col_idx = col_options.index(data_col)
-
+                region_idx = col_options.index(region_col)
+                commune_idx = col_options.index(commune_col)
+                data_idx = col_options.index(data_col)
             else:
                 df_raw = None
 
-        # Étape 3
-        with st.expander("Étape 3 : Générez votre rapport", expanded=True):
+        with st.expander("Étape 3 : Génération", expanded=True):
+            if df_raw is not None:
+                if st.button("Lancer l'Analyse", type="primary", use_container_width=True):
+                    df_cleaned = prepare_data_from_selection(df_raw, region_idx, commune_idx, data_idx)
+                    if not df_cleaned.empty:
+                        ai_texts = generate_ai_texts(df_cleaned, objective)
+                        fig = px.bar(df_cleaned, x="Commune", y="Data", color="Region", title=report_title)
+                        st.plotly_chart(fig, use_container_width=True)
 
-            if df_raw is None:
-                st.info("Veuillez charger un fichier Excel pour activer la génération du rapport.")
+                        report_sections = [
+                            {"title": "Introduction", "body": ai_texts["introduction"]},
+                            {"title": "Analyse", "body": ai_texts["abstract"]},
+                            {"title": "Statistiques", "table": df_cleaned.describe().to_string()}
+                        ]
+
+                        pdf_bytes = create_pdf_report({
+                            "title": report_title,
+                            "author": author_name,
+                            "sections": report_sections
+                        })
+                        st.session_state.pdf_bytes = pdf_bytes
+                        st.success("Rapport prêt !")
             else:
-                if st.button("Lancer l'Analyse et Créer le PDF", type="primary", use_container_width=True):
-                    with st.spinner("Analyse et rédaction en cours..."):
+                st.info("Veuillez charger un fichier.")
 
-                        df_cleaned = prepare_data_from_selection(
-                            df_raw, region_col_idx, commune_col_idx, data_col_idx
-                        )
-
-                        if df_cleaned.empty:
-                            st.error("L'analyse a échoué. Vérifiez la sélection de vos colonnes ou le format du fichier.")
-                        else:
-                            ai_texts = generate_ai_texts(df_cleaned, objective)
-                            os.makedirs("temp_plots", exist_ok=True)
-
-                            fig_bar = px.bar(
-                                df_cleaned,
-                                x="Commune",
-                                y="Data",
-                                color="Region",
-                                title="Analyse de 'Data' par Commune"
-                            )
-
-                            plot_path = None
-                            png_path = "temp_plots/descriptive_chart.png"
-                            html_path = "temp_plots/descriptive_chart.html"
-
-                            try:
-                                fig_bar.write_image(png_path, engine="kaleido", scale=2)
-                                plot_path = png_path
-                            except Exception:
-                                fig_bar.write_html(html_path, include_plotlyjs="cdn")
-                                plot_path = None
-                                st.warning("Export PNG indisponible sur cet environnement. Le rapport PDF sera généré sans image.")
-
-                            st.success("Analyse terminée ! Voici un aperçu du graphique :")
-                            st.plotly_chart(fig_bar, use_container_width=True)
-
-                            stats_table_str = df_cleaned[["Data"]].describe().to_string()
-
-                            report_sections = [
-                                {"title": "2. Résumé / Abstract", "body": ai_texts.get("abstract", "")},
-                                {"title": "3. Introduction", "body": ai_texts.get("introduction", "")},
-                                {"title": "4. Données", "body": ai_texts.get("data_description", "")},
-                                {"title": "5. Méthodologie", "body": ai_texts.get("methodology", "")},
-                                {
-                                    "title": "6. Analyse Descriptive",
-                                    "body": "Statistiques de base :",
-                                    "table": stats_table_str,
-                                    "plot_path": plot_path
-                                },
-                                {"title": "8. Discussion", "body": ai_texts.get("discussion", "")},
-                                {"title": "9. Conclusion", "body": ai_texts.get("conclusion", "")},
-                                {"title": "11. Annexes", "body": "Données nettoyées utilisées :", "table": df_cleaned.to_string()},
-                            ]
-
-                            report_data = {
-                                "title": report_title,
-                                "author": author_name,
-                                "organization": organization,
-                                "sections": report_sections,
-                            }
-
-                            pdf_bytes = create_pdf_report(report_data)
-                            st.session_state.pdf_bytes = pdf_bytes
-                            st.session_state.report_title = report_title
-                            st.success("Rapport PDF généré avec succès !")
-
-        # Download
         if "pdf_bytes" in st.session_state:
-            st.download_button(
-                label="⬇ Télécharger le Rapport PDF Complet",
-                data=st.session_state.pdf_bytes,
-                file_name=f"{st.session_state.report_title.replace(' ', '_')}.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
-
-
-
+            st.download_button("⬇ Télécharger le PDF", st.session_state.pdf_bytes, "rapport.pdf", "application/pdf")
 
 
 
