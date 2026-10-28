@@ -1,4 +1,4 @@
-# Axiora Data — Socio-Economic Analytics Platform for Morocco
+# Axiora Data: Socio-Economic Analytics Platform for Morocco
 
 An interactive **Streamlit** application for exploring, visualising and reporting on
 Moroccan socio-economic indicators published by the **HCP** (Haut-Commissariat au
@@ -15,9 +15,9 @@ choropleth maps, trend projections and automatically generated PDF reports.
 
 | | |
 |---|---|
-| **Type** | Personal project |
-| **Author** | Malak Mounji — Data & AI Engineering student, ENSA Agadir |
-| **Data source** | HCP Morocco — public open data (RGPH 2014 and related surveys) |
+| **Type** | Personal project, extends my HCP internship work (2025) |
+| **Author** | Malak Mounji, Data & AI Engineering student, ENSA Agadir |
+| **Data source** | HCP Morocco, public open data (RGPH 2014 and related surveys) |
 | **Status** | Deployed and publicly accessible |
 
 ---
@@ -45,9 +45,9 @@ The application covers **six thematic domains**, plus two cross-cutting modules:
 
 ### Cross-cutting modules
 
-- **Report generator** — builds a structured PDF report from an uploaded dataset,
+- **Report generator:** builds a structured PDF report from an uploaded dataset,
   including descriptive statistics, ranking tables and generated charts.
-- **Axiora assistant** — a conversational module built on the Google Gemini API
+- **Axiora assistant:** a conversational module built on the Google Gemini API
   that answers natural-language questions about the loaded indicators.
 
 ---
@@ -56,17 +56,18 @@ The application covers **six thematic domains**, plus two cross-cutting modules:
 
 ### Interactive visualisation
 
-- Choropleth maps at regional (**ADM2**) and provincial (**ADM3**) level, rendered
+- Choropleth maps at provincial (**ADM2**) and commune (**ADM3**) level, rendered
   with GeoPandas and Plotly
 - Comparative charts across territories and time periods
-- Filtering by year, region and indicator
+- Filtering by year, province and indicator
 
 ### Trend projection
 
 Linear regression (`scikit-learn`) is used to extrapolate indicator trends over
 time and produce simple forward projections. The intent is to make direction and
-magnitude of change readable, not to build a predictive model — the projections
-are descriptive extrapolations of historical series.
+magnitude of change readable, not to build a predictive model. Each line is fitted on the
+full observed series, with no held-out evaluation: the projections are descriptive
+extrapolations of short historical series.
 
 ### Automatic PDF reporting
 
@@ -115,8 +116,8 @@ Axiora-data-app/
 │   ├── logo.png
 │   └── photo.png
 │
-├── mar_admbnda_adm2_hcp_20230925/  # Regional boundaries (shapefile)
-└── mar_admbnda_adm3_hcp_20230925/  # Provincial boundaries (shapefile)
+├── mar_admbnda_adm2_hcp_20230925/  # Province and prefecture boundaries (shapefile)
+└── mar_admbnda_adm3_hcp_20230925/  # Commune boundaries (shapefile)
 ```
 
 ### About the shapefiles
@@ -172,7 +173,7 @@ The application opens at `http://localhost:8501`.
 ## Author
 
 **Malak Mounji**
-Data & AI Engineering student — ENSA Agadir, Morocco
+Data & AI Engineering student, ENSA Agadir, Morocco
 
 [GitHub](https://github.com/mounjimallak-bit) ·
 [LinkedIn](https://www.linkedin.com/in/malakmounji/)
