@@ -17,6 +17,18 @@ import os
 import plotly.io as pio
 import matplotlib
 
+# Noms de province tels qu'écrits dans les tables HCP -> nom ADM2_FR du shapefile.
+# Une seule table pour toutes les cartes : un nom absent ici disparaît de la carte
+# (jointure inner). validate_data.py vérifie que chaque nom des données y figure.
+PROVINCE_NAME_MAPPING = {
+    'Agadir Ida Outanane': 'Agadir Ida Ou Tanane', 'Agadir Idaoutanane': 'Agadir Ida Ou Tanane',
+    'Chtouka Ait Baha': 'Chtouka- Ait Baha', 'Chtouka Aït Baha': 'Chtouka- Ait Baha',
+    'Chtouka-Aït Baha': 'Chtouka- Ait Baha',
+    'Inezgane': 'Inezgane Ait Melloul', 'Inezgane Aït Melloul': 'Inezgane Ait Melloul',
+    'Inezgane-Aït Melloul': 'Inezgane Ait Melloul',
+    'Taroudant': 'Taroudannt',
+}
+
 
 
 
@@ -510,7 +522,7 @@ if st.session_state.page == "Population":
                 "Agadir Ida Outanane", "Inezgane-Aït Melloul", "Chtouka-Aït Baha",
                 "Taroudant", "Tiznit", "Tata", "Souss-Massa"
             ],
-            "RGPH 2004 – Urbain": [384987, 385612, 239694, 186471, 58613, 39060, 1094437],
+            "RGPH 2004 – Urbain": [384987, 385612, 39694, 186471, 58613, 39060, 1094437],
             "RGPH 2004 – Total": [487954, 419614, 297245, 780661, 217050, 121618, 2324142],
             "RGPH 2014 – Urbain": [508155, 513706, 113531, 248640, 81044, 40820, 1505896],
             "RGPH 2014 – Total": [600599, 541118, 371102, 838820, 207367, 117841, 2676847],
@@ -714,15 +726,15 @@ if st.session_state.page == "Population":
                 "Agadir Ida Outanane", "Inezgane Aït Melloul", "Chtouka Aït Baha",
                 "Taroudant", "Tata", "Tiznit", "Souss-Massa"
             ],
-            "2016 – Urbain": [535653, 539975, 125818, 260214, 41417, 85357, 1143390],
-            "2016 – Rural": [89307, 27595, 258625, 582540, 74937, 119786, 1635380],
-            "2016 – Total": [624960, 567570, 384443, 842754, 116354, 205143, 2778770],
+            "2016 – Urbain": [535653, 539975, 125818, 260214, 41417, 85357, 1588434],
+            "2016 – Rural": [89307, 27595, 258625, 582540, 74937, 119786, 1152790],
+            "2016 – Total": [624960, 567570, 384443, 842754, 116354, 205143, 2741224],
 
-            "2017 – Urbain": [551240, 554820, 133050, 266730, 41740, 87800, 1152790],
-            "2017 – Rural": [87650, 27710, 259260, 578550, 73840, 116380, 1588434],
-            "2017 – Total": [638890, 582530, 392310, 845280, 115580, 204180, 2741224],
+            "2017 – Urbain": [551240, 554820, 133050, 266730, 41740, 87800, 1635380],
+            "2017 – Rural": [87650, 27710, 259260, 578550, 73840, 116380, 1143390],
+            "2017 – Total": [638890, 582530, 392310, 845280, 115580, 204180, 2778770],
 
-            "2018 – Urbain": [567055, 569865, 140642, 273306, 42054, 90276, 1168198],
+            "2018 – Urbain": [567055, 569865, 140642, 273306, 42054, 90276, 1683198],
             "2018 – Rural": [86032, 27806, 259843, 574518, 72752, 113055, 1134006],
             "2018 – Total": [653087, 597671, 400485, 847824, 114806, 203331, 2817204],
         }
@@ -1162,15 +1174,22 @@ if st.session_state.page == "Population":
                 st.warning("⚠ Veuillez sélectionner au moins un indicateur !")
             else:
                 if graph_type == "Pie Chart":
+                    # La ligne Souss-Massa est le total régional : l'inclure dans un camembert
+                    # la ferait compter comme une part (50 % du total). Un camembert par
+                    # indicateur, côte à côte, pour qu'ils ne se superposent pas.
+                    df_pie = df[df["Provinces"] != "Souss-Massa"]
+                    n = len(columns_to_plot)
                     fig = go.Figure()
                     for idx, col in enumerate(columns_to_plot):
                         fig.add_trace(go.Pie(
-                            labels=df["Provinces"],
-                            values=df[col],
+                            labels=df_pie["Provinces"],
+                            values=df_pie[col],
                             name=col,
+                            title=col,
                             hole=0.3,
                             textinfo='label+percent',
-                            marker=dict(colors=custom_colors)
+                            marker=dict(colors=custom_colors),
+                            domain=dict(x=[idx / n, (idx + 1) / n - 0.02])
                         ))
                     st.plotly_chart(fig, use_container_width=True)
 
@@ -1353,7 +1372,7 @@ if st.session_state.page == "Population":
                 "Provinces": ["Agadir Ida Outanane", "Inezgane-Aït Melloul", "Chtouka-Aït Baha", "Taroudant", "Tiznit",
                               "Tata",
                               "Souss-Massa"],
-                "RGPH 2004 – Urbain": [384987, 385612, 239694, 186471, 58613, 39060, 1094437],
+                "RGPH 2004 – Urbain": [384987, 385612, 39694, 186471, 58613, 39060, 1094437],
                 "RGPH 2004 – Total": [487954, 419614, 297245, 780661, 217050, 121618, 2324142],
                 "RGPH 2014 – Urbain": [508155, 513706, 113531, 248640, 81044, 40820, 1505896],
                 "RGPH 2014 – Total": [600599, 541118, 371102, 838820, 207367, 117841, 2676847],
@@ -1362,13 +1381,13 @@ if st.session_state.page == "Population":
                 "Provinces": ["Agadir Ida Outanane", "Inezgane Aït Melloul", "Chtouka Aït Baha", "Taroudant", "Tata",
                               "Tiznit",
                               "Souss-Massa"],
-                "2016 – Urbain": [535653, 539975, 125818, 260214, 41417, 85357, 1143390],
-                "2016 – Rural": [89307, 27595, 258625, 582540, 74937, 119786, 1635380],
-                "2016 – Total": [624960, 567570, 384443, 842754, 116354, 205143, 2778770],
-                "2017 – Urbain": [551240, 554820, 133050, 266730, 41740, 87800, 1152790],
-                "2017 – Rural": [87650, 27710, 259260, 578550, 73840, 116380, 1588434],
-                "2017 – Total": [638890, 582530, 392310, 845280, 115580, 204180, 2741224],
-                "2018 – Urbain": [567055, 569865, 140642, 273306, 42054, 90276, 1168198],
+                "2016 – Urbain": [535653, 539975, 125818, 260214, 41417, 85357, 1588434],
+                "2016 – Rural": [89307, 27595, 258625, 582540, 74937, 119786, 1152790],
+                "2016 – Total": [624960, 567570, 384443, 842754, 116354, 205143, 2741224],
+                "2017 – Urbain": [551240, 554820, 133050, 266730, 41740, 87800, 1635380],
+                "2017 – Rural": [87650, 27710, 259260, 578550, 73840, 116380, 1143390],
+                "2017 – Total": [638890, 582530, 392310, 845280, 115580, 204180, 2778770],
+                "2018 – Urbain": [567055, 569865, 140642, 273306, 42054, 90276, 1683198],
                 "2018 – Rural": [86032, 27806, 259843, 574518, 72752, 113055, 1134006],
                 "2018 – Total": [653087, 597671, 400485, 847824, 114806, 203331, 2817204],
             },
@@ -1479,12 +1498,7 @@ if st.session_state.page == "Population":
         shapefile_path = "mar_admbnda_adm2_hcp_20230925/mar_admbnda_adm2_hcp_20230925.shp"
         gdf_provinces = load_shapefile(shapefile_path)
         if gdf_provinces is not None:
-            province_name_mapping = {
-                'Agadir Ida Outanane': 'Agadir Ida Ou Tanane', 'Chtouka-Aït Baha': 'Chtouka- Ait Baha',
-                'Inezgane-Aït Melloul': 'Inezgane-Ait Melloul', 'Taroudant': 'Taroudannt',
-                'Inezgane Aït Melloul': 'Inezgane-Ait Melloul', 'Chtouka Aït Baha': 'Chtouka- Ait Baha',
-                'Inezgane Ait Melloul': 'Inezgane-Ait Melloul', 'Inezgane': 'Inezgane-Ait Melloul'
-            }
+            province_name_mapping = PROVINCE_NAME_MAPPING
             df_filtre.loc[:, 'Province_corrige'] = df_filtre['Province'].replace(province_name_mapping)
             merged_gdf = gdf_provinces.merge(df_filtre, left_on='ADM2_FR', right_on='Province_corrige', how='inner')
 
@@ -1947,7 +1961,7 @@ elif st.session_state.page == "Marche de Travail":
             show_urbain_emp = st.checkbox("Urbain", True, key="urbain_emp1")
             show_rural_emp = st.checkbox("Rural", True, key="rural_emp1")
             show_total_emp = st.checkbox("Total", True, key="total_emp1")
-            graph_options_emp = ["Bar Groupé", "Line Plot", "Area Chart", "Pie Chart"]
+            graph_options_emp = ["Bar Groupé", "Line Plot", "Area Chart"]  # des taux ne se somment pas : pas de camembert
             graph_type_emp = st.selectbox("Type de graphique", graph_options_emp, key="graph_emp1", index=1)
 
         # --- Colonne 2 : graphique ---
@@ -2220,7 +2234,7 @@ elif st.session_state.page == "Marche de Travail":
             "Milieu": ["Région", "Urbain Région", "Rural Région", "Maroc", "Urbain Maroc", "Rural Maroc"],
             "15-24": [26013, 16908, 9105, 392146, 283177, 108969],
             "25-34": [37556, 27910, 9646, 480693, 403509, 77184],
-            "35-44": [12984, 9538, 2510, 135407, 113254, 22153],
+            "35-44": [12048, 9538, 2510, 135407, 113254, 22153],
             "45+": [8794, 6604, 2190, 97318, 79023, 18295],
             "Total": [84411, 60960, 23451, 1105564, 878963, 226601]
         }
@@ -2881,8 +2895,8 @@ elif st.session_state.page == "Marche de Travail":
 
             st.write("### Sélectionner branches")
             branches_select = []
-            for col in ["Forêt et pêche / Agriculture", "Industrie et commerce", "B.T.P", "Services", "Autres",
-                        "Total"]:
+            # "Total" n'est pas une branche : l'ajouter à un camembert ou à une barre empilée doublerait le total.
+            for col in ["Forêt et pêche / Agriculture", "Industrie et commerce", "B.T.P", "Services", "Autres"]:
                 if st.checkbox(col, value=True, key=f"branches_select_{col}"):
                     branches_select.append(col)
 
@@ -2974,8 +2988,8 @@ elif st.session_state.page == "Marche de Travail":
 
             st.write("### Choisir branches")
             branches_multi = []
-            for col in ["Forêt et pêche / Agriculture", "Industrie et commerce", "B.T.P", "Services", "Autres",
-                        "Total"]:
+            # "Total" n'est pas une branche : l'ajouter à un camembert ou à une barre empilée doublerait le total.
+            for col in ["Forêt et pêche / Agriculture", "Industrie et commerce", "B.T.P", "Services", "Autres"]:
                 if st.checkbox(col, value=True, key=f"branches_multi_{col}"):
                     branches_multi.append(col)
 
@@ -3065,7 +3079,7 @@ elif st.session_state.page == "Marche de Travail":
 
             st.write("### Sélectionner statut professionnel")
             statut_select = []
-            for statut in df_statut["Statut"]:
+            for statut in df_statut["Statut"][df_statut["Statut"] != "Total"]:  # Total n'est pas un statut
                 if st.checkbox(statut, value=True, key=f"statut_select1_{statut}"):
                     statut_select.append(statut)
 
@@ -3138,7 +3152,7 @@ elif st.session_state.page == "Marche de Travail":
 
             st.write("### Choisir statuts")
             statut_multi = []
-            for statut in df_statut["Statut"]:
+            for statut in df_statut["Statut"][df_statut["Statut"] != "Total"]:  # Total n'est pas un statut
                 if st.checkbox(statut, value=True, key=f"statut_multi2_{statut}"):
                     statut_multi.append(statut)
 
@@ -3218,7 +3232,7 @@ elif st.session_state.page == "Marche de Travail":
 
             st.write("### Sélectionner statut professionnel")
             statut_select = []
-            for statut in df_statut["Statut"]:
+            for statut in df_statut["Statut"][df_statut["Statut"] != "Total"]:  # Total n'est pas un statut
                 if st.checkbox(statut, value=True, key=f"statut_select2_{statut}"):
                     statut_select.append(statut)
 
@@ -3303,7 +3317,7 @@ elif st.session_state.page == "Marche de Travail":
 
             st.write("### Choisir statuts")
             statut_multi = []
-            for statut in df_statut["Statut"]:
+            for statut in df_statut["Statut"][df_statut["Statut"] != "Total"]:  # Total n'est pas un statut
                 if st.checkbox(statut, value=True, key=f"statut_multi1_{statut}"):
                     statut_multi.append(statut)
 
@@ -3978,10 +3992,7 @@ elif st.session_state.page == "Habitat":
 
         # --- CARTE ET GRAPHIQUE ---
         if gdf_provinces is not None and not df_filtre.empty:
-            province_name_mapping = {
-                'Agadir Ida Outanane': 'Agadir Ida Ou Tanane', 'Chtouka Ait Baha': 'Chtouka- Ait Baha',
-                'Inezgane Ait Melloul': 'Inezgane-Ait Melloul', 'Taroudant': 'Taroudannt'
-            }
+            province_name_mapping = PROVINCE_NAME_MAPPING
             df_filtre['join_key'] = df_filtre['Province'].replace(province_name_mapping)
             gdf_provinces['join_key'] = gdf_provinces['ADM2_FR']
 
@@ -4892,10 +4903,7 @@ elif st.session_state.page == "Finance":
         gdf_provinces = load_shapefile(shapefile_path)
 
         if gdf_provinces is not None:
-            province_name_mapping = {
-                'Agadir Ida Outanane': 'Agadir Ida Ou Tanane', 'Chtouka Ait Baha': 'Chtouka- Ait Baha',
-                'Inezgane Ait Melloul': 'Inezgane-Ait Melloul', 'Taroudant': 'Taroudannt'
-            }
+            province_name_mapping = PROVINCE_NAME_MAPPING
             # Utiliser .loc pour éviter le SettingWithCopyWarning
             df_filtre.loc[:, 'Province_corrige'] = df_filtre['Province'].replace(province_name_mapping)
             merged_gdf = gdf_provinces.merge(df_filtre, left_on='ADM2_FR', right_on='Province_corrige', how='inner')
@@ -5157,8 +5165,8 @@ elif st.session_state.page == "Enseignement":
             "Province": ["Agadir Ida Outanane", "Inezgane Ait Melloul", "Chtouka Ait Baha",
                          "Taroudant", "Tiznit", "Tata", "Total région Souss-Massa"],
             "Garçons 2018": [816, 830, 1334, 3048, 890, 494, 7412],
-            "Filles 2018": [942, 728, 1772, 5185, 1301, 833, 5658],
-            "Total 2018": [1758, 1558, 3106, 8233, 2191, 1327, 13070]
+            "Filles 2018": [1101, 942, 728, 2137, 411, 339, 5658],
+            "Total 2018": [1917, 1772, 2062, 5185, 1301, 833, 13070]
         }
 
         df_2017 = pd.DataFrame(data_2017)
@@ -5289,25 +5297,25 @@ elif st.session_state.page == "Enseignement":
         data_2017 = {
             "Province": ["Agadir Ida Outanane", "Inezgane Aït Melloul", "Chtouka Aït Baha",
                          "Taroudant", "Tiznit", "Tata", "Total"],
-            "1ère": [4492, 4443, 3987, 8280, 1607, 1516, 23925],
-            "2ème": [4191, 4399, 3751, 7239, 1178, 1147, 22005],
-            "3ème": [4283, 4399, 3987, 8611, 1147, 1134, 23561],
-            "4ème": [4204, 4147, 4147, 8985, 1232, 1209, 24924],
-            "5ème": [3932, 3754, 3754, 8144, 1134, 1134, 29852],
-            "6ème": [4433, 4515, 4515, 9856, 1339, 1339, 25097],
-            "Total": [25535, 27293, 24547, 51083, 6637, 7479, 161718]
+            "1ère": [9290, 9732, 9671, 21207, 3463, 2767, 56130],
+            "2ème": [8712, 9524, 8985, 19593, 3375, 2627, 52816],
+            "3ème": [8906, 9350, 8778, 19727, 3342, 2607, 52710],
+            "4ème": [8642, 9281, 8394, 18295, 3339, 2432, 50383],
+            "5ème": [8205, 9180, 7836, 17911, 3176, 2439, 48747],
+            "6ème": [9456, 9857, 8144, 17800, 3471, 2531, 51259],
+            "Total": [53211, 56924, 51808, 114533, 20166, 15403, 312045]
         }
 
         data_2018 = {
             "Province": ["Agadir Idaoutanane", "Inezgane Ait Melloul", "Chtouka Ait Baha",
                          "Taroudant", "Tiznit", "Tata", "Total Région Souss-Massa"],
-            "1ère": [4117, 8157, 8964, 8838, 3168, 2426, 35670],
-            "2ème": [4049, 8171, 8907, 8514, 3097, 2343, 35081],
-            "3ème": [3952, 7993, 8828, 8239, 3073, 2357, 34742],
-            "4ème": [4022, 8123, 8746, 7943, 3115, 2313, 35362],
-            "5ème": [4037, 8013, 8558, 7730, 3127, 2190, 33655],
-            "6ème": [3800, 7649, 8566, 7241, 2971, 2215, 32442],
-            "Total": [23977, 48106, 52569, 48505, 18551, 13844, 207952]
+            "1ère": [9311, 9828, 10013, 20369, 3535, 2779, 55835],
+            "2ème": [9025, 9743, 9436, 19931, 3390, 2569, 54094],
+            "3ème": [8923, 9623, 9163, 19811, 3298, 2647, 53465],
+            "4ème": [8931, 9534, 8661, 19014, 3324, 2523, 51987],
+            "5ème": [8673, 9232, 8322, 17986, 3291, 2377, 49881],
+            "6ème": [8826, 10737, 8245, 18006, 3337, 2408, 51559],
+            "Total": [53689, 58697, 53840, 115117, 20175, 15303, 316821]
         }
 
         df_2017 = pd.DataFrame(data_2017)
@@ -5484,27 +5492,27 @@ elif st.session_state.page == "Enseignement":
                 "2018": {"Province": ["Agadir Idaoutanane", "Inezgane Ait Melloul", "Chtouka Ait Baha", "Taroudant",
                                       "Tiznit", "Tata", "Total région Souss-Massa"],
                          "Hommes": [816, 830, 1334, 3048, 890, 494, 7412],
-                         "Femmes": [942, 728, 1772, 5185, 1301, 833, 5658],
-                         "Total": [1758, 1558, 3106, 8233, 2191, 1327, 13070]}
+                         "Femmes": [1101, 942, 728, 2137, 411, 339, 5658],
+                         "Total": [1917, 1772, 2062, 5185, 1301, 833, 13070]}
             },
             "Élèves par classe": {
                 "2017": {"Province": ["Agadir Ida Outanane", "Inezgane Aït Melloul", "Chtouka Aït Baha", "Taroudant",
-                                      "Tiznit", "Tata", "Total"], "1ère": [4492, 4443, 3987, 8280, 1607, 1516, 23925],
-                         "2ème": [4191, 4399, 3751, 7239, 1178, 1147, 22005],
-                         "3ème": [4283, 4399, 3987, 8611, 1147, 1134, 23561],
-                         "4ème": [4204, 4147, 4147, 8985, 1232, 1209, 24924],
-                         "5ème": [3932, 3754, 3754, 8144, 1134, 1134, 29852],
-                         "6ème": [4433, 4515, 4515, 9856, 1339, 1339, 25097],
-                         "Total": [25535, 27293, 24547, 51083, 6637, 7479, 161718]},
+                                      "Tiznit", "Tata", "Total"], "1ère": [9290, 9732, 9671, 21207, 3463, 2767, 56130],
+                         "2ème": [8712, 9524, 8985, 19593, 3375, 2627, 52816],
+                         "3ème": [8906, 9350, 8778, 19727, 3342, 2607, 52710],
+                         "4ème": [8642, 9281, 8394, 18295, 3339, 2432, 50383],
+                         "5ème": [8205, 9180, 7836, 17911, 3176, 2439, 48747],
+                         "6ème": [9456, 9857, 8144, 17800, 3471, 2531, 51259],
+                         "Total": [53211, 56924, 51808, 114533, 20166, 15403, 312045]},
                 "2018": {"Province": ["Agadir Idaoutanane", "Inezgane Ait Melloul", "Chtouka Ait Baha", "Taroudant",
                                       "Tiznit", "Tata", "Total Région Souss-Massa"],
-                         "1ère": [4492, 4443, 3987, 8280, 1607, 1516, 23925],
-                         "2ème": [4191, 4399, 3751, 7239, 1178, 1147, 22005],
-                         "3ème": [4283, 4399, 3987, 8611, 1147, 1134, 23561],
-                         "4ème": [4204, 4147, 4147, 8985, 1232, 1209, 24924],
-                         "5ème": [3932, 3754, 3754, 8144, 1134, 1134, 29852],
-                         "6ème": [4433, 4515, 4515, 9856, 1339, 1339, 25097],
-                         "Total": [25535, 27293, 24547, 51083, 6637, 7479, 161718]}
+                         "1ère": [9311, 9828, 10013, 20369, 3535, 2779, 55835],
+                         "2ème": [9025, 9743, 9436, 19931, 3390, 2569, 54094],
+                         "3ème": [8923, 9623, 9163, 19811, 3298, 2647, 53465],
+                         "4ème": [8931, 9534, 8661, 19014, 3324, 2523, 51987],
+                         "5ème": [8673, 9232, 8322, 17986, 3291, 2377, 49881],
+                         "6ème": [8826, 10737, 8245, 18006, 3337, 2408, 51559],
+                         "Total": [53689, 58697, 53840, 115117, 20175, 15303, 316821]}
             }
         }
 
@@ -5594,12 +5602,7 @@ elif st.session_state.page == "Enseignement":
 
         # --- CARTE ET GRAPHIQUE ---
         if gdf_provinces is not None and not df_filtre.empty:
-            province_name_mapping = {'Agadir Ida Outanane': 'Agadir Ida Ou Tanane',
-                                     'Chtouka Aït Baha': 'Chtouka- Ait Baha',
-                                     'Inezgane Aït Melloul': 'Inezgane-Ait Melloul', 'Taroudant': 'Taroudannt',
-                                     'Agadir Idaoutanane': 'Agadir Ida Ou Tanane',
-                                     'Inezgane Ait Melloul': 'Inezgane-Ait Melloul',
-                                     'Chtouka Ait Baha': 'Chtouka- Ait Baha'}
+            province_name_mapping = PROVINCE_NAME_MAPPING
             df_filtre['join_key'] = df_filtre['Province'].replace(province_name_mapping)
             gdf_provinces['join_key'] = gdf_provinces['ADM2_FR']
             gdf_merged = gdf_provinces.merge(df_filtre, on='join_key', how='inner')
@@ -5912,12 +5915,15 @@ elif st.session_state.page == "pauvrete":
                             "Tamri",
                             "Tiqqi", "Préfecture d'Agadir-Idaoutanane Urbain", "Préfecture d'Agadir-Idaoutanane Rural",
                             "Préfecture d'Agadir-Idaoutanane Ensemble"],
-                "Taux de pauvreté 2014": [0.39, 10.09, 26.2, 6.84, 6.91, 6.83, 4.64, 4.3, 9.76, 13.16, 4.9, 9.7, 5.9,
-                                          5.41,
-                                          17.02, 1.33, 8.53, 2.44],
+                "Taux de pauvreté 2014": [0.39, 10.09, 8.86, 6.84, 6.91, 6.83, 4.64, 4.3, 9.76, 13.16, 4.9, 9.7, 5.9, 5.41, 17.02, 1.33, 8.53, 2.44],
                 "Taux de vulnérabilité 2014": [3.1, 22.98, 21.76, 12.98, 20.34, 19.31, 13.15, 14.98, 23.04, 26.55,
                                                16.01, 24.25,
                                                16.51, 15.56, 31.41, 4.78, 20.75, 7.24]
+            },
+            "Inezgane-Ait Melloul": {
+                "Commune": ["Ait Melloul (M)", "Dcheira El Jihadia (M)", "Inezgane (M)", "Lqliaa (M)", "Oulad Dahou", "Temsia", "Temsia centre (AC)", "Préfecture d'Inezgane-Ait Melloul Urbain", "Préfecture d'Inezgane-Ait Melloul Rural", "Préfecture d'Inezgane-Ait Melloul Ensemble"],
+                "Taux de pauvreté 2014": [1.54, 0.28, 1.56, 4.34, 5.29, 7.58, 6.48, 2.01, 6.37, 2.23],
+                "Taux de vulnérabilité 2014": [8.15, 3.17, 9.56, 12.52, 16.08, 19.81, 13.43, 8.52, 17.83, 8.99]
             }
         }
 
@@ -5957,7 +5963,9 @@ elif st.session_state.page == "pauvrete":
         for province, data in pauvrete_data.items():
             df_temp = pd.DataFrame(data)
             df_temp["Province"] = province
-            df_temp = df_temp[~df_temp["Commune"].str.contains("Province de")]
+            # Garder uniquement les communes : les lignes "Province de ..." / "Préfecture de ..." sont des agrégats,
+            # et les centres (AC) sont inclus dans le polygone de leur commune (sinon deux valeurs par polygone).
+            df_temp = df_temp[~df_temp["Commune"].str.contains(r"Province de|Préfecture d|\(AC\)", regex=True)]
             liste_df.append(df_temp)
 
         df_stats = pd.concat(liste_df, ignore_index=True)
@@ -5971,8 +5979,6 @@ elif st.session_state.page == "pauvrete":
             gdf_communes['join_key'] = gdf_communes['ADM3_FR'].apply(nettoyer_nom)
 
             commune_name_mapping = {
-                "belfaa centre": "belfaa", "massa centre": "massa", "ait amira centre": "ait amira",
-                "sidi bibi centre": "sidi bibi", "drargua centre": "drarga", "aourir centre": "aourir",
                 "aqsri": "aqesri"
             }
             df_stats['join_key'] = df_stats['join_key'].replace(commune_name_mapping)
@@ -5996,9 +6002,9 @@ elif st.session_state.page == "pauvrete":
                         <span class="kpi-subvalue">{min_commune['Commune']}</span>
                     </div>
                     <div class="kpi-box">
-                        <span class="kpi-label">Moyenne Régionale</span>
+                        <span class="kpi-label">Moyenne des communes</span>
                         <span class="kpi-value">{moy_val:.1f}%</span>
-                        <span class="kpi-subvalue">Sur toutes les communes analysées</span>
+                        <span class="kpi-subvalue">Moyenne simple, non pondérée par la population</span>
                     </div>
                     <div class="kpi-box">
                         <span class="kpi-label">Taux le plus élevé</span>
@@ -6754,7 +6760,13 @@ elif st.session_state.page == "assistant axiora data":
     # ====== CONFIGURATION GEMINI ======
     col11, col22, col33 = st.columns([0.1, 1, 0.1])
     with col22:
-        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        try:
+            gemini_key = st.secrets["GEMINI_API_KEY"]
+        except Exception:
+            st.warning("L'assistant nécessite une clé Gemini : ajoutez GEMINI_API_KEY dans "
+                       ".streamlit/secrets.toml (voir le README). Les autres modules fonctionnent sans.")
+            st.stop()
+        genai.configure(api_key=gemini_key)
         model = genai.GenerativeModel('gemini-2.5-flash')
 
         # Passer en mode large (full width)
@@ -6769,18 +6781,23 @@ elif st.session_state.page == "assistant axiora data":
             st.session_state.open_menu = None
 
 
+        def donnees_pour_assistant():
+            """Données envoyées à l'assistant. Toutes les tables passent validate_data.py ;
+            si une table échoue un jour, la retirer ici plutôt que l'envoyer telle quelle."""
+            return hcp_data
+
         # ====== Fonction : Réponse IA ======
         def response_to_query(query: str) -> str:
             hcp_definition = "Le HCP (Haut-Commissariat au Plan) est l'institution nationale chargée de la production, de l'analyse et de la diffusion des statistiques officielles au Maroc. Il joue un rôle crucial dans la planification économique et sociale en fournissant des données fiables sur des sujets tels que la population, l'emploi, l'économie, et le niveau de vie."
 
-            data_json = json.dumps(hcp_data, indent=2, ensure_ascii=False)
+            data_json = json.dumps(donnees_pour_assistant(), indent=2, ensure_ascii=False)
             prompt = f"""
                     Tu es un assistant expert en données statistiques du HCP.
 
                     Si la question concerne la définition ou le rôle du HCP, réponds avec la définition suivante :
                     "{hcp_definition}"
 
-                    Si la question porte sur des données chiffrées, réponds UNIQUEMENT à partir des données suivantes (en milliers sauf mention contraire).
+                    Si la question porte sur des données chiffrées, réponds UNIQUEMENT à partir des données suivantes. Les valeurs sont des effectifs bruts, sauf les colonnes de taux (en %) et celles dont le nom indique une autre unité (milliers, millions de DH, Ha). Si la donnée demandée n'y figure pas, dis-le au lieu de l'estimer.
                     Données HCP :
                     {data_json}
 
