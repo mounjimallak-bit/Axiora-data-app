@@ -447,7 +447,9 @@ if st.session_state.page == "Population":
             selected_indicator = st.selectbox(
                 "Indicateur", indicators, index=0, key="indicator_communes"
             )
-            graph_options = ["Bar Plot comparatif", "Évolution", "Variation %", "Prévision"]
+            # Pas de "Prévision" ici : prolonger un nombre de communes ou de cercles à partir de deux années
+            # par une droite produit des valeurs absurdes (communes négatives).
+            graph_options = ["Bar Plot comparatif", "Évolution", "Variation %"]
             graph_type = st.selectbox(
                 "Graphique", graph_options, index=0, key="graph_type_communes"  # Évolution par défaut
             )
@@ -474,6 +476,7 @@ if st.session_state.page == "Population":
                     df_melt, x="Année", y=selected_indicator, color="Province",
                     markers=True, color_discrete_sequence=px.colors.qualitative.Set2
                 )
+                fig.update_xaxes(dtick=1)  # années entières, pas 2017,2
 
             elif graph_type == "Variation %":
                 col_y1, col_y2 = cols[0], cols[1]
@@ -2074,7 +2077,10 @@ elif st.session_state.page == "Marche de Travail":
                     st.plotly_chart(fig, use_container_width=True)
 
                 elif graph_type_comp_emp == "Heatmap":
-                    df_heat = df_melted_emp.pivot_table(index="Sexe", columns="Année", values="Valeur", aggfunc="mean")
+                    # Une colonne par (année, milieu) : faire la moyenne de l'urbain, du rural et du
+                    # total mélangerait un total avec ses propres parties.
+                    df_heat = df_melted_emp.pivot_table(index="Sexe", columns=["Année", "Milieu"], values="Valeur")
+                    df_heat.columns = [f"{a} {m}" for a, m in df_heat.columns]
                     fig = px.imshow(df_heat, text_auto=True, aspect="auto", color_continuous_scale="Blues")
 
                     st.plotly_chart(fig, use_container_width=True)
@@ -3480,9 +3486,9 @@ elif st.session_state.page == "Habitat":
 
         with col1:
             province_select = st.multiselect("Choisir provinces", df_ops["Province"].dropna().tolist(),
-                                             default=df_ops["Province"].dropna().tolist(), key="province_ops")
+                                             default=[p for p in df_ops["Province"].dropna().tolist() if p != "Total"], key="province_ops")
             colonnes_select = st.multiselect("Choisir colonnes", df_ops.columns[1:].tolist(),
-                                             default=df_ops.columns[1:].tolist(), key="colonnes_ops")
+                                             default=df_ops.columns[1:2].tolist(), key="colonnes_ops")
             graph_type = st.selectbox("Type de graphique", ["Barres", "Pie", "Treemap", "Funnel"], index=0,
                                       key="graph_ops")
 
@@ -3565,10 +3571,10 @@ elif st.session_state.page == "Habitat":
 
         with col1:
             province_select = st.multiselect("Choisir provinces", df_ops_lancement["Province"].dropna().tolist(),
-                                             default=df_ops_lancement["Province"].dropna().tolist(),
+                                             default=[p for p in df_ops_lancement["Province"].dropna().tolist() if p != "Total"],
                                              key="province_lancement")
             colonnes_select = st.multiselect("Choisir colonnes", df_ops_lancement.columns[1:].tolist(),
-                                             default=df_ops_lancement.columns[1:].tolist(), key="colonnes_lancement")
+                                             default=df_ops_lancement.columns[1:2].tolist(), key="colonnes_lancement")
             graph_type = st.selectbox("Type de graphique", ["Barres", "Pie", "Treemap", "Funnel"], index=3,
                                       key="graph_lancement")
 
@@ -3663,12 +3669,12 @@ elif st.session_state.page == "Habitat":
         with col1:
             province_select = st.multiselect(
                 "Choisir provinces", df_ops_execution["Province"].dropna().tolist(),
-                default=df_ops_execution["Province"].dropna().tolist(), key="province_execution"
+                default=[p for p in df_ops_execution["Province"].dropna().tolist() if p != "Total"], key="province_execution"
             )
             colonnes_select = st.multiselect(
                 "Choisir colonnes",
                 df_ops_execution.columns[1:].tolist(),
-                default=df_ops_execution.columns[1:].tolist(),
+                default=df_ops_execution.columns[1:2].tolist(),
                 key="colonnes_execution"
             )
 
@@ -3761,9 +3767,9 @@ elif st.session_state.page == "Habitat":
         with col1a:
             st.markdown("<br><br>", unsafe_allow_html=True)
             province_select = st.multiselect("Choisir provinces", df_ops_etude["Province"].dropna().tolist(),
-                                             default=df_ops_etude["Province"].dropna().tolist(), key="province_etude")
+                                             default=[p for p in df_ops_etude["Province"].dropna().tolist() if p != "Total"], key="province_etude")
             colonnes_select = st.multiselect("Choisir colonnes", df_ops_etude.columns[1:].tolist(),
-                                             default=df_ops_etude.columns[1:].tolist(), key="colonnes_etude")
+                                             default=df_ops_etude.columns[1:2].tolist(), key="colonnes_etude")
             graph_type = st.selectbox("Type de graphique",
                                       ["Sunburst", "Funnel Area", "Polar (Radar)", "Barres empilées"], index=1,
                                       key="graph_etude")
@@ -5326,7 +5332,7 @@ elif st.session_state.page == "Enseignement":
 
         # ================== Interface ==================
 
-        st.markdown("<h4 style='color: #607080;'>3-Personnel enseignant par classe et province</h4>",
+        st.markdown("<h4 style='color: #607080;'>3-Élèves du primaire public par niveau et province</h4>",
                     unsafe_allow_html=True)
 
         col1, col2, col3 = st.columns([1, 3, 1])
@@ -5334,14 +5340,16 @@ elif st.session_state.page == "Enseignement":
             year = st.radio("Choisir une année :", ["2017", "2018"], index=1, key="radio_year3")
             show_cols = st.multiselect("Afficher classes:",
                                        options=df_2017.columns[1:],
-                                       default=list(df_2017.columns[1:]),  # tout sélectionné par défaut
+                                       default=[c for c in df_2017.columns[1:] if c != "Total"],  # niveaux, sans le total
                                        key="multi_cols3")
             graph_type_viz = st.selectbox("Type de graphique",
-                                          ["Barre", "Ligne", "Aire", "Radar", "Nuage de points", "Box"], index=3,
+                                          ["Barre", "Ligne", "Aire", "Radar", "Nuage de points", "Box"], index=0,
                                           key="graph_viz3")
 
         with col2:
             df_plot = df_2017.copy() if year == "2017" else df_2018.copy()
+            # la ligne régionale est la somme des provinces : on ne la trace pas à côté d'elles
+            df_plot = df_plot[~df_plot["Province"].str.contains("Total|Région")]
             cols = [c for c in df_plot.columns if c in show_cols]
 
             if cols:
@@ -6810,8 +6818,10 @@ elif st.session_state.page == "assistant axiora data":
                 resp = model.generate_content(prompt)
                 return resp.text
             except Exception as e:
-                # Gérer les erreurs, par exemple si l'outil n'a pas pu être utilisé
-                return f"Désolé, une erreur est survenue lors de la recherche. Erreur: {e}"
+                if "429" in str(e) or "quota" in str(e).lower():
+                    return ("L'assistant a atteint sa limite de requêtes pour le moment. "
+                            "Réessayez un peu plus tard ; les tableaux de bord restent disponibles.")
+                return "Désolé, la réponse n'a pas pu être générée. Réessayez dans un instant."
 
 
         # ====== CSS ======
