@@ -181,10 +181,14 @@ on the current data it reports no errors across 93 tables.
 The tables are transcribed from the public statistical publications of the HCP
 Souss-Massa regional directorate (hcp.ma/region-agadir): the *Annuaire
 statistique régional* for 2017 and 2018, the commune poverty sheets *Evolution
-des indicateurs de pauvreté 2004, 2007 et 2014*, and the RGPH 2014 results. Each
-numeric table was cross-checked value by value against its source, and the
-internal totals (province rows against the regional row, Urbain + Rural, subtotals
-against their parts) are enforced by `validate_data.py`.
+des indicateurs de pauvreté 2004, 2007 et 2014*, and the RGPH 2014 results. Most
+numeric tables were cross-checked value by value against their source
+publication. The three labour-market tables for 2017–2020 were taken from the
+regional results of the ENE survey and were not checked cell by cell against a
+single published table. The internal totals (province rows against the regional
+row, Urbain + Rural, subtotals against their parts) are enforced by
+`validate_data.py`.
+
 
 Two points are documented rather than checked automatically:
 
