@@ -163,56 +163,6 @@ The application opens at `http://localhost:8501`.
 
 ---
 
-## Data checks
-
-```bash
-python validate_data.py
-```
-
-The script parses the tables in `hcpdata.py` and `app.py` without running the app
-and checks that every column of a table has the same length, that totals match
-their parts (Urbain + Rural, Hommes + Femmes, regional row vs provinces), that no
-rate is a missing value typed as 0, and that every province and commune name
-reaches a polygon in the shapefiles. It exits with code 1 while errors remain;
-on the current data it reports no errors across 93 tables.
-
-## Data provenance
-
-The tables are transcribed from the public statistical publications of the HCP
-Souss-Massa regional directorate (hcp.ma/region-agadir): the *Annuaire
-statistique régional* for 2017 and 2018, the commune poverty sheets *Evolution
-des indicateurs de pauvreté 2004, 2007 et 2014*, and the RGPH 2014 results. Most
-numeric tables were cross-checked value by value against their source
-publication. The three labour-market tables for 2017–2020 were taken from the
-regional results of the ENE survey and were not checked cell by cell against a
-single published table. The internal totals (province rows against the regional
-row, Urbain + Rural, subtotals against their parts) are enforced by
-`validate_data.py`.
-
-
-Two points are documented rather than checked automatically:
-
-- The RGPH 2004 urban population of Chtouka-Aït Baha is not given directly in any
-  HCP sheet. It is set to 39,694, the value for which the province figures add up
-  exactly to the published regional total; this is an inference, not a published
-  figure.
-- On the commune poverty map, the central KPI is the unweighted mean of commune
-  rates (not a population-weighted regional rate) and is labelled as such.
-
-The PDF report generator operates on a file the user uploads, so its output
-depends on that file; it drops aggregate rows ("Total", "Région", "Ensemble")
-before ranking or summing, and the included `validate_data.py` does not inspect
-uploaded files.
-
-## Notes and Limitations
-
-- The interface language is **French**, matching the source data.
-- Projections use linear regression only; they extrapolate observed trends and
-  should not be read as forecasts accounting for structural change.
-- Indicator coverage depends on what HCP publishes; some series are available for
-  a limited number of years.
-
----
 
 ## Author
 
