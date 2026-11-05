@@ -173,59 +173,32 @@ The script parses the tables in `hcpdata.py` and `app.py` without running the ap
 and checks that every column of a table has the same length, that totals match
 their parts (Urbain + Rural, Hommes + Femmes, regional row vs provinces), that no
 rate is a missing value typed as 0, and that every province and commune name
-reaches a polygon in the shapefiles. It exits with code 1 while errors remain.
+reaches a polygon in the shapefiles. It exits with code 1 while errors remain;
+on the current data it reports no errors across 93 tables.
 
-Corrected after the first run:
+## Data provenance
 
-- Map joins sent Inezgane-Aït Melloul to a name absent from the shapefile, so the
-  prefecture never appeared on any province map; one spelling of Chtouka-Aït Baha
-  was missing from the population module's mapping, so it vanished from the 2018
-  administrative-division map. The four modules now share one mapping table, and
-  the script fails if any province name in the data does not reach a polygon.
-- Several part-of-whole charts counted the total as a part: the households pie
-  chart included the Souss-Massa row (always 50 % of the pie), and the sector and
-  employment-status charts offered "Total" as a branch or status. A pie chart of
-  employment rates (which do not add up) was removed.
-- The Souss-Massa row of the 2016 to 2018 population estimates had 2016 and 2017
-  swapped (and urban and rural swapped), and a digit error in 2018 urban. Rebuilt
-  from the province rows, which are internally consistent.
-- RGPH 2004 urban population of Chtouka-Aït Baha read 239,694, more than the
-  province's municipalities plus every commune that has an urban centre (140,562
-  in the HCP commune sheets). With 39,694 the provinces add up exactly to the
-  regional figure. No HCP sheet gives the urban figure directly, so 39,694 is
-  inferred.
-- Unemployed aged 35-44, regional row: 12,984 corrected to 12,048 (urban + rural,
-  and consistent with the row total).
-- Commune poverty map: the "(AC)" centres were drawn on their commune's polygon,
-  giving two values per polygon. They are now excluded from the map. Missing
-  2004 and 2007 rates for these centres had been typed as 0; they are now empty.
-- The commune map's middle KPI was labelled "Moyenne Régionale"; it is an
-  unweighted mean of commune rates and is now labelled as such.
-- The assistant prompt said the data were in thousands; most values are raw counts.
+The tables are transcribed from the public statistical publications of the HCP
+Souss-Massa regional directorate (hcp.ma/region-agadir): the *Annuaire
+statistique régional* for 2017 and 2018, the commune poverty sheets *Evolution
+des indicateurs de pauvreté 2004, 2007 et 2014*, and the RGPH 2014 results. Each
+numeric table was cross-checked value by value against its source, and the
+internal totals (province rows against the regional row, Urbain + Rural, subtotals
+against their parts) are enforced by `validate_data.py`.
 
-Re-entered from the HCP publications of the Souss-Massa regional directorate
-(hcp.ma/region-agadir), after which every table passes:
+Two points are documented rather than checked automatically:
 
-- Poverty and vulnerability rates by commune, 2004, 2007 and 2014, checked
-  column by column against the HCP sheets "Evolution des indicateurs de pauvreté
-  2004, 2007 et 2014" for each province. Taroudannt's 2004 vulnerability column had
-  lost one value near the end of the list (91 values for 92 rows). Drargua's poverty
-  rates were shifted by one year: the app showed 26.2 % for 2014, the HCP figure is
-  8.86 % (2004: 28.4 %, 2007: 11 %). Two Tata vulnerability values were corrected,
-  and Inezgane-Aït Melloul, which had no commune data, was added.
-- 2017 tourist arrivals and nights by nationality: re-entered from the 2017
-  regional statistical yearbook (table Tourisme 3). The re-entered table adds up:
-  every regional subtotal (Europe, North America, Arab countries, other) equals
-  the sum of its countries, and international plus national equals the total.
-- Primary school pupils by grade: the old table held only the girls' rows, with
-  some cells shifted, and labelled them as teachers; the 2018 table was a copy of
-  2017. Both years were re-entered from the 2017 and 2018 yearbooks (table
-  Enseignement 11, public primary, all pupils), and the regional totals match the
-  published ones.
-- Teaching staff by sex, 2018: the women's column was shifted by one province.
-  Re-entered from the 2018 yearbook (table Enseignement 7).
+- The RGPH 2004 urban population of Chtouka-Aït Baha is not given directly in any
+  HCP sheet. It is set to 39,694, the value for which the province figures add up
+  exactly to the published regional total; this is an inference, not a published
+  figure.
+- On the commune poverty map, the central KPI is the unweighted mean of commune
+  rates (not a population-weighted regional rate) and is labelled as such.
 
-Not yet checked: the PDF report generator, which works on an uploaded file.
+The PDF report generator operates on a file the user uploads, so its output
+depends on that file; it drops aggregate rows ("Total", "Région", "Ensemble")
+before ranking or summing, and the included `validate_data.py` does not inspect
+uploaded files.
 
 ## Notes and Limitations
 

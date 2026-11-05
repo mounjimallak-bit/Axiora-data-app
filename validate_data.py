@@ -19,6 +19,7 @@ Exit code is 1 when at least one error is found, so it can run in CI.
 """
 
 import ast
+import re
 import struct
 import sys
 import unicodedata
@@ -97,12 +98,27 @@ def read_dbf(path):
     return rows
 
 
+def row_table(obj):
+    """{row: {col: value}} (the energy tables) -> column table, or None."""
+    if obj and all(isinstance(v, dict) and v and all(not isinstance(x, (dict, list)) for x in v.values())
+                   for v in obj.values()):
+        rows = list(obj)
+        cols = list(dict.fromkeys(c for r in rows for c in obj[r]))
+        return {"Libellé": rows, **{c: [obj[r].get(c) for r in rows] for c in cols}}
+    return None
+
+
 def iter_tables(obj, path):
-    """Yield (path, table) for every dict whose values include lists (a column table)."""
+    """Yield (path, table) for every column table, including row-oriented ones."""
     if not isinstance(obj, dict):
         return
     if any(isinstance(v, list) for v in obj.values()):
         yield path, obj
+        return
+    rt = row_table(obj)
+    if rt:
+        yield path, rt
+        return
     for k, v in obj.items():
         if isinstance(v, dict):
             yield from iter_tables(v, f"{path}/{k}")
@@ -115,13 +131,13 @@ def is_num(x):
 
 def is_rate(col):
     c = col.lower()
-    return "taux" in c or "%" in c or "couverture" in c
+    return bool(re.search(r"(^|[^a-zà-ÿ])taux([^a-zà-ÿ]|$)", c)) or "%" in c or "couverture" in c
 
 
 def is_rate_table(name, table):
     """Tables of rates cannot be summed. Detected by name, or by values that all look like percentages."""
     n = name.lower()
-    if "taux" in n or "activite" in n or "diplome" in n:
+    if is_rate(n) or "activite_par" in n or "instruction" in n or "diplome" in n:
         return True
     nums = [x for v in table.values() if isinstance(v, list) for x in v if is_num(x)]
     return bool(nums) and all(0 <= x <= 100 for x in nums) and any(isinstance(x, float) and x != int(x) for x in nums)
@@ -205,8 +221,9 @@ def check_row_totals(name, table):
     for c, values in table.items():
         if c == lab or not isinstance(values, list) or is_rate(c) or len(values) != len(labels):
             continue
-        parts = [values[i] for i in parts_idx]
-        if is_num(values[a]) and all(is_num(p) for p in parts):
+        # None = not published for that row (Tata in the habitat tables): it adds nothing to the total.
+        parts = [values[i] for i in parts_idx if values[i] is not None]
+        if is_num(values[a]) and parts and all(is_num(p) for p in parts):
             if not close(values[a], sum(parts)):
                 err(f"[total] {name}: row '{labels[a]}' column '{c}' = {values[a]} "
                     f"but the other rows sum to {round(sum(parts), 2)}")
@@ -296,6 +313,33 @@ def check_duplicates(hcp, app_tables):
 
 
 # ---------------------------------------------------------------- main
+# Tables whose "Total" column is the sum of named columns (beyond the Urbain/Rural pairs).
+COLUMN_SUMS = {
+    "nombre_consommateurs_par_type_tension": ("Total", ["Basse tension", "Moyenne tension", "Haute tension"]),
+    "eleves_primaire_public_par_niveau": ("Total", ["1ère", "2ème", "3ème", "4ème", "5ème", "6ème"]),
+    "Élèves par classe": ("Total", ["1ère", "2ème", "3ème", "4ème", "5ème", "6ème"]),
+    "lits_hopitaux_publics_2017": ("Total", ["Hôpitaux généraux", "Hôpitaux spécialisés"]),
+    "population_chomage_age_milieu": ("Total", ["15-24", "25-34", "35-44", "45+"]),
+    "population_active_occupee_secteurs": ("Total", ["Forêt et pêche / Agriculture", "Industrie et commerce",
+                                                      "B.T.P", "Services", "Autres"]),
+    "population_active_occupee_sexe": ("Total", ["Masculin", "Féminin"]),
+}
+
+
+def check_named_sums(name, table):
+    for key, (tot, parts) in COLUMN_SUMS.items():
+        if not name.endswith(key) and f"/{key}/" not in name:
+            continue
+        if tot not in table or not all(p in table for p in parts):
+            continue
+        labels = table.get(label_column(table) or "", None)
+        for i, t in enumerate(table[tot]):
+            vals = [table[p][i] for p in parts]
+            if is_num(t) and all(is_num(v) for v in vals) and not close(t, sum(vals)):
+                row = labels[i] if labels else i
+                err(f"[total] {name}: {row}: {tot} = {t} but {' + '.join(parts)} = {sum(vals)}")
+
+
 def main():
     hcp = literal_tables(ROOT / "hcpdata.py")["hcp_data"]
     app = literal_tables(ROOT / "app.py")
@@ -309,6 +353,7 @@ def main():
         if ok:
             check_column_totals(name, table)
             check_row_totals(name, table)
+            check_named_sums(name, table)
         check_zero_rates(name, table)
 
     check_province_names(ROOT / "app.py", tables)
