@@ -1,4 +1,3 @@
-from sklearn.linear_model import LinearRegression
 from PIL import Image
 import base64
 import streamlit as st
@@ -29,55 +28,21 @@ PROVINCE_NAME_MAPPING = {
     'Taroudant': 'Taroudannt',
 }
 
-# Lignes d'agrégat des tables HCP (total régional, ensemble, Maroc). Elles restent dans les
-# tableaux affichés à côté des graphiques, mais ne sont jamais tracées à côté des provinces
-# ou des communes qu'elles additionnent : elles écraseraient l'échelle et se liraient comme
-# une province de plus.
-import re as _re
-import functools as _functools
-
-_AGGREGATE_LABEL = _re.compile(r"\b(?:total|ensemble|r[ée]gion|souss[- ]?massa|maroc)\b", _re.I)
-_TERRITORY_COLUMNS = ("Province", "Provinces", "Commune")
+# Lignes d'agrégat des tables HCP. Elles restent dans les tableaux affichés à côté des graphiques,
+# mais sont retirées, à la source, des données tracées : à côté des provinces qu'elles additionnent,
+# elles écraseraient l'échelle et se liraient comme une province de plus. La liste est exacte (pas
+# d'expression régulière) : un libellé absent de la liste n'est jamais retiré, et sans_agregats()
+# échoue si elle ne trouve pas la ligne attendue, au lieu de laisser passer un total.
+LIGNES_AGREGAT = {"Souss-Massa", "Région", "Région Souss-Massa", "Total", "Total Région Souss-Massa",
+                  "Total région Souss-Massa"}
 
 
-def is_aggregate_label(label):
-    return isinstance(label, str) and bool(_AGGREGATE_LABEL.search(label))
-
-
-def without_aggregates(df, column):
-    """Retire les lignes d'agrégat d'un DataFrame, si la colonne contient aussi des territoires."""
-    if column not in getattr(df, "columns", []):
-        return df
-    mask = df[column].map(is_aggregate_label)
-    if mask.any() and (~mask).sum() >= 2:
-        return df[~mask]
-    return df
-
-
-def _sans_agregats(plot_function):
-    @_functools.wraps(plot_function)
-    def wrapper(*args, **kwargs):
-        data = kwargs.get("data_frame", args[0] if args else None)
-        if isinstance(data, pd.DataFrame):
-            used = {v for v in kwargs.values() if isinstance(v, str)}
-            for v in kwargs.get("path", None) or []:
-                used.add(v)
-            for column in _TERRITORY_COLUMNS:
-                if column in used:
-                    data = without_aggregates(data, column)
-            if "data_frame" in kwargs:
-                kwargs["data_frame"] = data
-            elif args:
-                args = (data,) + tuple(args[1:])
-        return plot_function(*args, **kwargs)
-    return wrapper
-
-
-for _name in ("bar", "line", "scatter", "area", "pie", "treemap", "sunburst", "funnel", "funnel_area",
-              "line_polar", "box", "strip", "density_heatmap"):
-    setattr(px, _name, _sans_agregats(getattr(px, _name)))
-
-
+def sans_agregats(df, colonne):
+    """Le tableau sans ses lignes d'agrégat (voir LIGNES_AGREGAT)."""
+    agregat = df[colonne].isin(LIGNES_AGREGAT)
+    if agregat.sum() != 1:
+        raise ValueError(f"{colonne} : une ligne d'agrégat attendue, {int(agregat.sum())} trouvée(s)")
+    return df[~agregat].reset_index(drop=True)
 
 
 # --- Configuration page ---
@@ -396,7 +361,7 @@ if st.session_state.page == "Population":
             else:
                 df = pd.DataFrame(data_2018)
 
-            graph_options = ["Courbes multiples", "Barres groupées", "Scatter multi-dimension"]
+            graph_options = ["Barres groupées", "Scatter multi-dimension"]  # des provinces ne forment pas un axe continu : pas de courbes
             graph_type = st.selectbox("Type de graphique", graph_options, index=0)
 
             st.markdown("<h9 style='color:#3e5c76;'>Sélectionnez les indicateurs à afficher</h9>",
@@ -422,11 +387,6 @@ if st.session_state.page == "Population":
                     colors = ["#a83232", "#8799ad", "#a19d37", "#c1cddf"]
                     fig = px.bar(df, x="Province", y=columns_to_plot, barmode="group",
                                  color_discrete_sequence=colors[:len(columns_to_plot)])
-                    st.plotly_chart(fig, width="stretch")
-                elif graph_type == "Courbes multiples":
-                    colors = ["#1c354f", "#a19d37", "#a83232", "#8799ad"]
-                    fig = px.line(df, x="Province", y=columns_to_plot, markers=True,
-                                  color_discrete_sequence=colors[:len(columns_to_plot)])
                     st.plotly_chart(fig, width="stretch")
                 elif graph_type == "Scatter multi-dimension":
                     x_col = "Total Communes" if "Total Communes" in columns_to_plot else columns_to_plot[0]
@@ -495,11 +455,9 @@ if st.session_state.page == "Population":
             selected_indicator = st.selectbox(
                 "Indicateur", indicators, index=0, key="indicator_communes"
             )
-            # Pas de "Prévision" ici : prolonger un nombre de communes ou de cercles à partir de deux années
-            # par une droite produit des valeurs absurdes (communes négatives).
             graph_options = ["Bar Plot comparatif", "Évolution", "Variation %"]
             graph_type = st.selectbox(
-                "Graphique", graph_options, index=0, key="graph_type_communes"  # Évolution par défaut
+                "Graphique", graph_options, index=0, key="graph_type_communes"
             )
 
         # --- Col2 : graphique ---
@@ -534,33 +492,8 @@ if st.session_state.page == "Population":
                     color_continuous_scale=["#758a72", "#7a3d2c", "#abb1d6", "#dede85"]
                 )
 
-            elif graph_type == "Prévision":
-                df_melt = df.melt(
-                    id_vars="Province", value_vars=cols,
-                    var_name="Année", value_name=selected_indicator
-                )
-                df_melt["Année"] = df_melt["Année"].str.extract(r"(\d{4})").astype(int)
-
-                predictions = []
-                for prov in df["Province"]:
-                    sub = df_melt[df_melt["Province"] == prov]
-                    X = sub["Année"].values.reshape(-1, 1)
-                    y = sub[selected_indicator].values
-                    model = LinearRegression().fit(X, y)
-                    future_years = np.array([2019, 2020, 2021]).reshape(-1, 1)
-                    y_pred = model.predict(future_years)
-                    for yr, val in zip([2019, 2020, 2021], y_pred):
-                        predictions.append({"Province": prov, "Année": yr, selected_indicator: val})
-
-                df_pred = pd.DataFrame(predictions)
-                df_all = pd.concat([df_melt, df_pred])
-                fig = px.line(
-                    df_all, x="Année", y=selected_indicator, color="Province",
-                    markers=True, color_discrete_sequence=px.colors.qualitative.Set2
-                )
 
             st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
-        ################# taaaaab 22222
         st.markdown("""
                <h4 style=' color: #85919e;margin-left: 0px;'>
                               2 – Population légale selon provinces et préfectures						
@@ -581,11 +514,13 @@ if st.session_state.page == "Population":
 
         df = pd.DataFrame(data)
         col1, col2, col3 = st.columns([2, 1, 1])  # 1 : Graphique, 2 : tableau, 3 : choix
+        df_tableau = df  # tableau affiché, avec sa ligne régionale
+        df = sans_agregats(df, "Provinces")  # données tracées
 
         # --- Colonne 3 : choix utilisateur ---
         with col3:
             st.markdown("<br><br>", unsafe_allow_html=True)
-            graph_options = ["Area Miroir", "Line Plot", "Heatmap", "Bar Plot"]
+            graph_options = ["Barres miroir", "Heatmap", "Bar Plot"]
             graph_type = st.selectbox("Type de graphique", graph_options, index=0)
 
             st.markdown("<h5 style='color:#3e5c76;'>Sélectionnez les indicateurs à afficher</h5>",
@@ -603,31 +538,31 @@ if st.session_state.page == "Population":
             if not columns_to_plot:
                 st.warning("⚠ Veuillez sélectionner au moins un indicateur !")
             else:
-                dfp = without_aggregates(df, "Provinces")  # provinces seules, sans la ligne Souss-Massa
-                if graph_type == "Area Miroir":
+                dfp = df
+                if graph_type == "Barres miroir":
                     fig = go.Figure()
                     # Total d'abord, Urbain après pour visibilité
                     if "Total" in columns_to_plot:
-                        fig.add_trace(go.Scatter(
+                        fig.add_trace(go.Bar(
                             x=dfp["Provinces"],
                             y=dfp["RGPH 2004 – Total"],
-                            fill='tozeroy', mode='none', name="2004 Total", fillcolor='#b36b6b'
+                            name="2004 Total", marker_color='#b36b6b'
                         ))
-                        fig.add_trace(go.Scatter(
+                        fig.add_trace(go.Bar(
                             x=dfp["Provinces"],
                             y=[-val for val in dfp["RGPH 2014 – Total"]],
-                            fill='tozeroy', mode='none', name="2014 Total", fillcolor='#802828'
+                            name="2014 Total", marker_color='#802828'
                         ))
                     if "Urbain" in columns_to_plot:
-                        fig.add_trace(go.Scatter(
+                        fig.add_trace(go.Bar(
                             x=dfp["Provinces"],
                             y=dfp["RGPH 2004 – Urbain"],
-                            fill='tozeroy', mode='none', name="2004 Urbain", fillcolor='#7ea6c2'
+                            name="2004 Urbain", marker_color='#7ea6c2'
                         ))
-                        fig.add_trace(go.Scatter(
+                        fig.add_trace(go.Bar(
                             x=dfp["Provinces"],
                             y=[-val for val in dfp["RGPH 2014 – Urbain"]],
-                            fill='tozeroy', mode='none', name="2014 Urbain", fillcolor='#5a7b8c'
+                            name="2014 Urbain", marker_color='#5a7b8c'
                         ))
                     ticks = [k * 200_000 for k in range(-5, 6)]
                     fig.update_layout(
@@ -637,15 +572,11 @@ if st.session_state.page == "Population":
                             title="Population (2004 au-dessus, 2014 en dessous)"
                         ),
                         xaxis=dict(title="Provinces", tickfont=dict(size=8)),
+                        barmode="overlay",
                         template="plotly_white"
                     )
                     st.plotly_chart(fig, width="stretch")
 
-                elif graph_type == "Line Plot":
-                    colors = ["#7ea6c2", "#5a7b8c", "#b36b6b", "#802828"]
-                    fig = px.line(dfp, x="Provinces", y=[col for col in dfp.columns if "Urbain" in col or "Total" in col],
-                                  markers=True, color_discrete_sequence=colors)
-                    st.plotly_chart(fig, width="stretch")
 
                 elif graph_type == "Heatmap":
                     heat_data = dfp[[col for col in dfp.columns if "Urbain" in col or "Total" in col]]
@@ -663,7 +594,7 @@ if st.session_state.page == "Population":
         with col2:
             st.markdown("<br><br>", unsafe_allow_html=True)
 
-            st.dataframe(df, width="stretch")
+            st.dataframe(df_tableau, width="stretch")
         #############previsualisation tab 2
 
         st.markdown("""
@@ -739,34 +670,9 @@ if st.session_state.page == "Population":
                     color_continuous_scale=["#758a72", "#7a3d2c", "#abb1d6", "#dede85"]
                 )
 
-            elif graph_type == "Prévision":
-                df_melt = df.melt(
-                    id_vars="Provinces", value_vars=cols,
-                    var_name="Année", value_name="Population"
-                )
-                df_melt["Année"] = df_melt["Année"].str.extract(r"(\d{4})").astype(int)
-
-                predictions = []
-                for prov in df["Provinces"]:
-                    sub = df_melt[df_melt["Provinces"] == prov]
-                    X = sub["Année"].values.reshape(-1, 1)
-                    y = sub["Population"].values
-                    model = LinearRegression().fit(X, y)
-                    future_years = np.array([2015, 2016, 2017, 2018, 2019]).reshape(-1, 1)
-                    y_pred = model.predict(future_years)
-                    for yr, val in zip([2015, 2016, 2017, 2018, 2019], y_pred):
-                        predictions.append({"Provinces": prov, "Année": yr, "Population": val})
-
-                df_pred = pd.DataFrame(predictions)
-                df_all = pd.concat([df_melt, df_pred])
-                fig = px.line(
-                    df_all, x="Année", y="Population", color="Provinces",
-                    markers=True, color_discrete_sequence=px.colors.qualitative.Set2
-                )
 
             st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
-            #####tab3
         st.markdown("""
                       <h4 style=' color: #85919e;margin-left: 0px;'>
                                     3 – Estimations de la population selon le milieu de résidence														
@@ -794,6 +700,8 @@ if st.session_state.page == "Population":
         df = pd.DataFrame(data)
 
         # --- Palette perso ---
+        df_tableau = df  # tableau affiché, avec sa ligne régionale
+        df = sans_agregats(df, "Provinces")  # données tracées
         custom_colors = ["#1c354f", "#4d0f14", "#758a72"]
 
         # --- Layout colonnes ---
@@ -803,8 +711,8 @@ if st.session_state.page == "Population":
         with col1:
             year_options = ["2016", "2017", "2018"]
             selected_year = st.selectbox("Choisir l'année", year_options)
-            graph_options = ["scatter chart", "Line Plot", "Bar Plot"]
-            graph_type = st.selectbox("Type de graphique", graph_options, index=2)
+            graph_options = ["scatter chart", "Bar Plot"]
+            graph_type = st.selectbox("Type de graphique", graph_options, index=1)
 
             show_urbain = st.checkbox("Urbain", True, key="chec7")
             show_rural = st.checkbox("Rural", True, key="chec8")
@@ -825,14 +733,8 @@ if st.session_state.page == "Population":
                 st.warning("⚠ Veuillez sélectionner au moins un indicateur !")
             else:
                 # --- Graphiques ---
-                if graph_type == "Line Plot":
-                    fig = px.line(
-                        df, x="Provinces", y=columns_to_plot, markers=True,
-                        color_discrete_sequence=custom_colors
-                    )
-                    st.plotly_chart(fig, width="stretch")
 
-                elif graph_type == "scatter chart":
+                if graph_type == "scatter chart":
                     if len(columns_to_plot) >= 2:
                         x_col = columns_to_plot[0]
                         y_col = columns_to_plot[1]
@@ -857,8 +759,7 @@ if st.session_state.page == "Population":
 
         # --- Colonne 3 : tableau ---
         with col3:
-            st.dataframe(df[["Provinces"] + columns_to_plot], width="stretch")
-        ######prevision tab 3
+            st.dataframe(df_tableau[["Provinces"] + columns_to_plot], width="stretch")
 
         st.markdown("""
                 <div style='
@@ -899,7 +800,7 @@ if st.session_state.page == "Population":
             )
             graph_options = ["Bar Plot comparatif", "Évolution", "Variation %"]  # deux recensements ne suffisent pas pour une prévision
             graph_type = st.selectbox(
-                "Graphique", graph_options, index=1, key="graph_type_province"  # Prévision par défaut
+                "Graphique", graph_options, index=1, key="graph_type_province"
             )
 
         # --- Col2 : graphique ---
@@ -939,34 +840,9 @@ if st.session_state.page == "Population":
                     color_continuous_scale=["#758a72", "#7a3d2c", "#abb1d6", "#dede85"]
                 )
 
-            elif graph_type == "Prévision":
-                df_melt = df.melt(
-                    id_vars="Provinces", value_vars=cols,
-                    var_name="Année", value_name="Population"
-                )
-                df_melt["Année"] = df_melt["Année"].str.extract(r"(\d{4})").astype(int)
-
-                predictions = []
-                for prov in df["Provinces"]:
-                    sub = df_melt[df_melt["Provinces"] == prov]
-                    X = sub["Année"].values.reshape(-1, 1)
-                    y = sub["Population"].values
-                    model = LinearRegression().fit(X, y)
-                    future_years = np.array([2019, 2020, 2021]).reshape(-1, 1)
-                    y_pred = model.predict(future_years)
-                    for yr, val in zip([2019, 2020, 2021], y_pred):
-                        predictions.append({"Provinces": prov, "Année": yr, "Population": val})
-
-                df_pred = pd.DataFrame(predictions)
-                df_all = pd.concat([df_melt, df_pred])
-                fig = px.line(
-                    df_all, x="Année", y="Population", color="Provinces",
-                    markers=True, color_discrete_sequence=px.colors.qualitative.Set2
-                )
 
             st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
-        #########tab4
         st.markdown("""
                               <h4 style=' color: #85919e;margin-left: 0px;'>
                                             4 – Évolution de la population selon les groupes d’âges et le milieu																						
@@ -1130,30 +1006,9 @@ if st.session_state.page == "Population":
                 fig = px.bar(df, x="Groupe d’âge", y="Variation %", color="Variation %",
                              color_continuous_scale=["#758a72", "#7a3d2c", "#abb1d6", "#dede85"])
 
-            elif graph_type == "Prévision":
-                df_melt = df.melt(id_vars="Groupe d’âge", value_vars=cols,
-                                  var_name="Année", value_name="Population")
-                df_melt["Année"] = df_melt["Année"].str.extract(r"(\d{4})").astype(int)
-
-                predictions = []
-                for group in df["Groupe d’âge"]:
-                    sub = df_melt[df_melt["Groupe d’âge"] == group]
-                    X = sub["Année"].values.reshape(-1, 1)
-                    y = sub["Population"].values
-                    model = LinearRegression().fit(X, y)
-                    future_years = np.array([2019, 2020, 2021]).reshape(-1, 1)
-                    y_pred = model.predict(future_years)
-                    for yr, val in zip([2019, 2020, 2021], y_pred):
-                        predictions.append({"Groupe d’âge": group, "Année": yr, "Population": val})
-
-                df_pred = pd.DataFrame(predictions)
-                df_all = pd.concat([df_melt, df_pred])
-                fig = px.line(df_all, x="Année", y="Population", color="Groupe d’âge", markers=True,
-                              color_discrete_sequence=px.colors.qualitative.Set2)
 
             st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
-        ############# tab 5
         st.markdown("""
                                       <h4 style=' color: #85919e;margin-left: 0px;'>
                                                    5 – Estimation du nombre de ménages selon le milieu de résidence								 </h4>
@@ -1170,6 +1025,8 @@ if st.session_state.page == "Population":
             "Urbain": [134559, 127686, 31543, 59704, 8411, 21928, 383831],
         }
         df_2014 = pd.DataFrame(data_2014)
+        df_2014_tableau = df_2014  # tableau affiché, avec sa ligne régionale
+        df_2014 = sans_agregats(df_2014, "Provinces")  # données tracées
 
         # ================== Données 2018 ==================
         data_2018 = {
@@ -1184,6 +1041,8 @@ if st.session_state.page == "Population":
         df_2018 = pd.DataFrame(data_2018)
 
         # ================== Trois colonnes ==================
+        df_2018_tableau = df_2018  # tableau affiché, avec sa ligne régionale
+        df_2018 = sans_agregats(df_2018, "Provinces")  # données tracées
         col1, col2, col3 = st.columns([2, 1, 1])  # Graphique, tableau, choix
 
         # ================== Colonne 3 : choix utilisateur ==================
@@ -1195,7 +1054,7 @@ if st.session_state.page == "Population":
             selected_year = st.selectbox("Choisir l'année", year_options, key="select_year_1")
 
             # Sélecteur graphique avec clé unique (Pie Chart par défaut)
-            graph_options = ["Pie Chart", "Bar Plot", "Line Plot", "Heatmap"]
+            graph_options = ["Pie Chart", "Bar Plot", "Heatmap"]
             graph_type = st.selectbox("Type de graphique", graph_options, index=0, key="graph_type_1")
 
             st.markdown("<h7 style='color:#3e5c76;'>Sélectionnez les indicateurs</h7>", unsafe_allow_html=True)
@@ -1227,10 +1086,9 @@ if st.session_state.page == "Population":
                 st.warning("⚠ Veuillez sélectionner au moins un indicateur !")
             else:
                 if graph_type == "Pie Chart":
-                    # La ligne Souss-Massa est le total régional : l'inclure dans un camembert
-                    # la ferait compter comme une part (50 % du total). Un camembert par
-                    # indicateur, côte à côte, pour qu'ils ne se superposent pas.
-                    df_pie = df[df["Provinces"] != "Souss-Massa"]
+                    # Un camembert par indicateur, côte à côte, pour qu'ils ne se superposent pas
+                    # (la ligne Souss-Massa est déjà retirée : elle compterait pour 50 % du total).
+                    df_pie = df
                     n = len(columns_to_plot)
                     fig = go.Figure()
                     for idx, col in enumerate(columns_to_plot):
@@ -1253,15 +1111,9 @@ if st.session_state.page == "Population":
                     )
                     st.plotly_chart(fig, width="stretch")
 
-                elif graph_type == "Line Plot":
-                    fig = px.line(
-                        df, x="Provinces", y=columns_to_plot, markers=True,
-                        color_discrete_sequence=custom_colors
-                    )
-                    st.plotly_chart(fig, width="stretch")
 
                 elif graph_type == "Heatmap":
-                    dfp = without_aggregates(df, "Provinces")
+                    dfp = df
                     fig = px.imshow(
                         dfp[columns_to_plot].T, x=dfp["Provinces"], y=columns_to_plot,
                         color_continuous_scale="Blues", text_auto=True, aspect="auto"
@@ -1272,9 +1124,8 @@ if st.session_state.page == "Population":
         with col2:
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("<br><br>", unsafe_allow_html=True)
-            st.dataframe(df[["Provinces"] + columns_to_plot], width="stretch")
+            st.dataframe((df_2014_tableau if selected_year == "2014" else df_2018_tableau)[["Provinces"] + columns_to_plot], width="stretch")
 
-        ########## prediction tab5
 
         st.markdown("""
                 <div style='
@@ -1304,7 +1155,7 @@ if st.session_state.page == "Population":
         with col1:
             st.markdown("<br><br><br><br>", unsafe_allow_html=True)
             st.markdown("""
-           Entre 2014 et 2018, la population a globalement progressé, avec une hausse plus marquée en milieu urbain. 
+           Entre 2014 et 2018, le nombre de ménages de la région passe de 635 101 à 661 925 : la hausse est entièrement urbaine (+27 576), le nombre de ménages ruraux restant stable (−752). 
 
             """)
             st.markdown("<br>", unsafe_allow_html=True)
@@ -1341,20 +1192,6 @@ if st.session_state.page == "Population":
                 )
 
 
-            elif graph_type == "Prévision":
-                years = np.array([2014, 2018]).reshape(-1, 1)
-                future_years = np.array([2019, 2020, 2021]).reshape(-1, 1)
-                predictions = {}
-                for i, row in df.iterrows():
-                    y = np.array([row[col_2014], row[col_2018]])
-                    model = LinearRegression().fit(years, y)
-                    y_pred = model.predict(future_years)
-                    predictions[row["Provinces"]] = y_pred
-                df_pred = pd.DataFrame(predictions, index=[2019, 2020, 2021])
-                df_pred.reset_index(inplace=True)
-                df_pred_melt = df_pred.melt(id_vars="index", var_name="Province", value_name="Population")
-                fig = px.line(df_pred_melt, x="index", y="Population", color="Province", markers=True,
-                              color_discrete_sequence=px.colors.qualitative.Set2)
 
             st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
         st.write("")
@@ -1501,7 +1338,7 @@ if st.session_state.page == "Population":
             final_df = pd.concat(records, ignore_index=True)
             final_df = final_df[final_df['Province'] != 'Souss-Massa'].copy()
             final_df['Valeur'] = pd.to_numeric(final_df['Valeur'], errors='coerce')
-            final_df.dropna(subset=['Valeur'], inplace=True)
+            final_df = final_df.dropna(subset=['Valeur'])
             return final_df
 
 
@@ -1512,13 +1349,19 @@ if st.session_state.page == "Population":
         df_complet = process_all_data(population_data)
         st.write("")
 
-        # --- DONNÉES ET BANDEAU KPI ---
-        # Le code pour calculer les KPIs est placé ici pour être accessible globalement
-        # mais les filtres qui en dépendent sont déplacés plus bas.
-        df_theme_temp = df_complet[df_complet['Thème'] == df_complet['Thème'].unique()[0]]
-        df_indicateur_temp = df_theme_temp[df_theme_temp['Indicateur'] == df_theme_temp['Indicateur'].unique()[0]]
-        annee_choisie_temp = sorted(df_indicateur_temp['Année'].unique(), reverse=True)[0]
-        df_filtre = df_indicateur_temp[df_indicateur_temp['Année'] == annee_choisie_temp]
+        # --- FILTRES : le bandeau, la carte et le graphique suivent ces trois choix ---
+        col1_filter, col2_filter, col3_filter = st.columns(3)
+        with col1_filter:
+            theme_choisi = st.selectbox("1. Choisissez un thème :", df_complet['Thème'].unique())
+        df_theme = df_complet[df_complet['Thème'] == theme_choisi]
+        with col2_filter:
+            indicateur_choisi = st.selectbox("2. Choisissez un indicateur :", df_theme['Indicateur'].unique())
+        df_indicateur = df_theme[df_theme['Indicateur'] == indicateur_choisi]
+        with col3_filter:
+            annee_choisie = st.selectbox("3. Choisissez une année :",
+                                         sorted(df_indicateur['Année'].unique(), reverse=True))
+        df_filtre = df_indicateur[df_indicateur['Année'] == annee_choisie].copy()
+        st.caption(f"{theme_choisi} — {indicateur_choisi} — {annee_choisie}")
 
         if not df_filtre.empty:
             total_regional = f"{df_filtre['Valeur'].sum():,.0f}".replace(',', ' ')
@@ -1564,7 +1407,7 @@ if st.session_state.page == "Population":
                                                    mapbox_style="open-street-map", center={"lat": 30.0, "lon": -8.5},
                                                    zoom=6,
                                                    opacity=0.8,
-                                                   labels={'Valeur': 'Valeur sélectionnée'})
+                                                   labels={'Valeur': indicateur_choisi})
                     fig_map.update_traces(marker_line_width=1.5, marker_line_color='white')
                     fig_map.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0})
                     st.plotly_chart(fig_map, width="stretch")
@@ -1572,7 +1415,7 @@ if st.session_state.page == "Population":
                     df_sorted = merged_gdf.sort_values(by="Valeur", ascending=True)
                     fig_bar = px.bar(df_sorted, x="Valeur", y='Province', orientation='h', text_auto='.2s',
                                      color="Valeur", color_continuous_scale="YlGnBu",
-                                     labels={'Valeur': 'Valeur sélectionnée'})
+                                     labels={'Valeur': indicateur_choisi})
                     fig_bar.update_layout(showlegend=False)
                     st.plotly_chart(fig_bar, width="stretch")
             else:
@@ -1580,19 +1423,6 @@ if st.session_state.page == "Population":
         else:
             st.error("Données géographiques non chargées.")
 
-        col1_filter, col2_filter, col3_filter = st.columns(3)
-        with col1_filter:
-            theme_choisi = st.selectbox("1. Choisissez un thème :", df_complet['Thème'].unique())
-        df_theme = df_complet[df_complet['Thème'] == theme_choisi]
-        with col2_filter:
-            indicateur_choisi = st.selectbox("2. Choisissez un indicateur :", df_theme['Indicateur'].unique())
-        df_indicateur = df_theme[df_theme['Indicateur'] == indicateur_choisi]
-        with col3_filter:
-            annee_choisie = st.selectbox("3. Choisissez une année :",
-                                         sorted(df_indicateur['Année'].unique(), reverse=True))
-
-        st.write("")
-        st.markdown("<br>", unsafe_allow_html=True)
 
 
 
@@ -1689,6 +1519,8 @@ elif st.session_state.page == "Marche de Travail":
         # ================== Première ligne : Visualisation individuelle ==================
 
         col1, col2, col3 = st.columns([1, 2, 1])
+        df_tableau = df  # tableau affiché, avec sa ligne régionale
+        df = sans_agregats(df, "Âge")  # données tracées
 
         # --- Colonne 1 : choix utilisateur ---
         with col1:
@@ -1726,7 +1558,7 @@ elif st.session_state.page == "Marche de Travail":
         with col3:
             st.markdown("<br><br><br><br>", unsafe_allow_html=True)
 
-            st.dataframe(df, width="stretch")
+            st.dataframe(df_tableau, width="stretch")
 
         # ================== Deuxième ligne : Comparaison multi-années ==================
         st.markdown("""
@@ -1794,19 +1626,8 @@ elif st.session_state.page == "Marche de Travail":
                                  title=f"Variation relative du taux entre {annee1} et {annee2} (%)")
                     st.plotly_chart(fig, width="stretch")
 
-                elif graph_type_comp == "Prévision":
-                    st.write("Prévision basée sur régression linéaire pour les années à venir")
-                    future_years = np.arange(min(annees_select), max(annees_select) + 5, 1).reshape(-1, 1)
-                    for col in cols_to_plot_comp:
-                        y = df[[f"{annee}-{col}" for annee in annees_select]].values.T
-                        model = LinearRegression().fit(np.array(annees_select).reshape(-1, 1), y)
-                        y_pred = model.predict(future_years)
-                        for idx, col_val in enumerate(cols_to_plot_comp):
-                            st.line_chart(
-                                pd.DataFrame({f"{col_val} prévision": y_pred[:, idx]}, index=future_years.flatten()))
             else:
                 st.warning("⚠ Veuillez sélectionner au moins un indicateur et une année !")
-        ###################taaaabbb22
         st.markdown("""
         <h4 style='color: #85919e;margin-left: 0px;'>
         2-Évolution du taux d'activité par niveau d'instruction et milieu (2017–2020)
@@ -1859,31 +1680,30 @@ elif st.session_state.page == "Marche de Travail":
                         value_name="Valeur"
                     )
                     df_plot = pd.concat([df_plot, df_subset], ignore_index=True)
-
+                df_plot = df_plot[df_plot["Année"] == annee_select]  # l'année choisie ; la comparaison des années est plus bas
                 # -------------------- Graphiques --------------------
                 if graph_type_vis == "Barres groupées":
                     fig = px.bar(
-                        df_plot, x="Niveau", y="Valeur", color="Année", barmode="group",
-                        facet_col="Milieu", text="Valeur",
+                        df_plot, x="Niveau", y="Valeur", color="Milieu", barmode="group", text="Valeur",
                         color_discrete_sequence=["#556270", "#4ECDC4", "#C7F464", "#FF6B6B"]
                     )
                     fig.update_traces(textposition="outside", marker_line_color='black', marker_line_width=1.5)
-                    fig.update_layout(title="Taux d'activité par niveau et milieu", title_x=0.5,
+                    fig.update_layout(title=f"Taux d'activité par niveau et milieu ({annee_select})", title_x=0.5,
                                       template="plotly_white")
                     st.plotly_chart(fig, width="stretch")
 
                 elif graph_type_vis == "Line Plot":
                     fig = px.line(
-                        df_plot, x="Niveau", y="Valeur", color="Année", markers=True, line_dash="Milieu",
+                        df_plot, x="Niveau", y="Valeur", color="Milieu", markers=True,
                         color_discrete_sequence=["#556270", "#4ECDC4", "#C7F464", "#FF6B6B"]
                     )
                     fig.update_traces(marker=dict(size=10, line=dict(width=2, color='DarkSlateGrey')))
-                    fig.update_layout(title="Évolution du taux d'activité par niveau et milieu", title_x=0.5,
+                    fig.update_layout(title=f"Taux d'activité selon le niveau d'instruction ({annee_select})", title_x=0.5,
                                       template="plotly_white")
                     st.plotly_chart(fig, width="stretch")
 
                 elif graph_type_vis == "Radar Chart":
-                    df_radar = df_plot[df_plot["Année"] == annee_select]
+                    df_radar = df_plot
                     fig = px.line_polar(df_radar, r="Valeur", theta="Niveau", color="Milieu", line_close=True,
                                         markers=True)
                     fig.update_layout(title=f"Taux d'activité par niveau et milieu ({annee_select})", title_x=0.5, template="plotly_white")
@@ -1953,7 +1773,6 @@ elif st.session_state.page == "Marche de Travail":
             else:
                 st.warning("⚠ Veuillez sélectionner au moins un milieu et une année !")
 
-        ################# tab 3
 
         # ================== Titre ==================
         st.markdown("""
@@ -1988,8 +1807,8 @@ elif st.session_state.page == "Marche de Travail":
             show_urbain_emp = st.checkbox("Urbain", True, key="urbain_emp1")
             show_rural_emp = st.checkbox("Rural", True, key="rural_emp1")
             show_total_emp = st.checkbox("Total", True, key="total_emp1")
-            graph_options_emp = ["Bar Groupé", "Line Plot"]  # des taux ne se somment pas : ni camembert ni aires empilées
-            graph_type_emp = st.selectbox("Type de graphique", graph_options_emp, key="graph_emp1", index=1)
+            graph_options_emp = ["Bar Groupé", "Points"]  # des taux ne se somment pas, et les sexes ne forment pas un axe continu
+            graph_type_emp = st.selectbox("Type de graphique", graph_options_emp, key="graph_emp1", index=0)
 
         # --- Colonne 2 : graphique ---
         with col2e:
@@ -2008,20 +1827,21 @@ elif st.session_state.page == "Marche de Travail":
                         value_name="Valeur"
                     )
                     df_plot_emp = pd.concat([df_plot_emp, df_subset_emp], ignore_index=True)
-
+                df_plot_emp = df_plot_emp[df_plot_emp["Année"] == annee_select_emploi]  # l'année choisie
                 # -------------------- Graphiques --------------------
                 if graph_type_emp == "Bar Groupé":
                     fig = px.bar(
-                        df_plot_emp, x="Sexe", y="Valeur", color="Année", barmode="group",
-                        facet_col="Milieu", text="Valeur"
+                        df_plot_emp, x="Sexe", y="Valeur", color="Milieu", barmode="group", text="Valeur",
+                        title=f"Taux d'emploi par sexe et milieu ({annee_select_emploi})"
                     )
                     fig.update_traces(textposition="outside")
 
                     st.plotly_chart(fig, width="stretch")
 
-                elif graph_type_emp == "Line Plot":
-                    fig = px.line(
-                        df_plot_emp, x="Sexe", y="Valeur", color="Année", markers=True, line_dash="Milieu"
+                elif graph_type_emp == "Points":
+                    fig = px.scatter(
+                        df_plot_emp, x="Sexe", y="Valeur", color="Milieu", symbol="Milieu",
+                        title=f"Taux d'emploi par sexe et milieu ({annee_select_emploi})"
                     )
                     fig.update_traces(marker=dict(size=9))
 
@@ -2099,7 +1919,6 @@ elif st.session_state.page == "Marche de Travail":
                     st.plotly_chart(fig, width="stretch")
             else:
                 st.warning("⚠ Veuillez sélectionner au moins un milieu et une année !")
-        ########## taaaaaaaaaaaaaab 4
 
         # ================== TITRE ==================
         st.markdown("""
@@ -2119,6 +1938,8 @@ elif st.session_state.page == "Marche de Travail":
             "Taux_Chômage_Total": [10.4, 12.0, 5.9, 9.0]
         }
         df_ind = pd.DataFrame(data_indicateurs)
+        df_ind_tableau = df_ind  # tableau affiché, avec sa ligne régionale
+        df_ind = sans_agregats(df_ind, "Province")  # données tracées
 
         # ================== Palette harmonieuse ==================
         custom_palette = [
@@ -2175,7 +1996,7 @@ elif st.session_state.page == "Marche de Travail":
 
         with col3i:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
-            st.dataframe(df_ind, width="stretch")
+            st.dataframe(df_ind_tableau, width="stretch")
 
         # ================== Deuxième ligne : Comparaison multi-indicateurs ==================
         st.markdown("""
@@ -2191,8 +2012,8 @@ elif st.session_state.page == "Marche de Travail":
             st.markdown("<br><br><br><br><br>", unsafe_allow_html=True)
             st.markdown("""
             - Activité plus forte en rural.  
-            - Chômage beaucoup plus élevé en urbain.  
-            - Taroudannt affiche le meilleur taux d’activité.  
+            - Chômage beaucoup plus élevé en urbain au niveau régional (13,9 % contre 4,7 %), sauf à Inezgane Ait Melloul où le taux rural (14,5 %) dépasse le taux urbain.  
+            - Le HCP ne publie ce tableau que pour trois provinces ; parmi elles, Taroudannt a le taux d’activité le plus élevé (54,1 %).  
             """)
 
         with col2ci:
@@ -2234,7 +2055,6 @@ elif st.session_state.page == "Marche de Travail":
                     st.plotly_chart(fig, width="stretch")
             else:
                 st.warning("⚠ Veuillez sélectionner au moins un milieu et un indicateur !")
-        # taaaaaaaaaaaaaaaaaab 5
 
         # ================== TITRE ==================
         st.markdown("""
@@ -2325,7 +2145,7 @@ elif st.session_state.page == "Marche de Travail":
         with col1c:
             st.markdown("<br><br><br><br><br><br>", unsafe_allow_html=True)
             st.markdown("""
-            - Les jeunes (15-24 ans) représentent une forte proportion du chômage.  
+            - Les 25-34 ans forment le groupe le plus nombreux parmi les chômeurs de la région (44,5 %), devant les 15-24 ans (30,8 %).  
 
 
             - Le milieu urbain a globalement plus de chômeurs que le rural.  
@@ -2369,7 +2189,6 @@ elif st.session_state.page == "Marche de Travail":
             else:
                 st.warning("⚠ Veuillez sélectionner au moins un milieu et une tranche d'âge !")
 
-        ############taaaaaaaaab 6
 
         st.markdown("""
         <style>
@@ -2480,7 +2299,7 @@ elif st.session_state.page == "Marche de Travail":
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             niveaux_multi = st.multiselect("Choisir niveaux à comparer",
                                            ["Sans diplôme", "Niveau moyenne", "Niveau supérieur", "Total"],
-                                           default=["Sans diplôme", "Niveau moyenne", "Niveau supérieur", "Total"],
+                                           default=["Sans diplôme", "Niveau moyenne", "Niveau supérieur"],
                                            key="2")
             milieux_multi = st.multiselect("Choisir milieux", df_diplome["Milieu"].unique(),
                                            default=df_diplome["Milieu"].unique(),
@@ -2513,7 +2332,6 @@ elif st.session_state.page == "Marche de Travail":
             else:
                 st.warning("⚠ Veuillez sélectionner au moins un milieu et un niveau !")
 
-        ########################## taaaaaaaab 7
 
         # ================== STYLE ==================
         st.markdown("""
@@ -2559,7 +2377,7 @@ elif st.session_state.page == "Marche de Travail":
             st.write("### Sélectionner milieux")
             milieux_select = []
             for milieu in df_age.columns[1:]:
-                if st.checkbox(milieu, value=milieu.startswith("Région"), key=f"milieux_select_{milieu}"):
+                if st.checkbox(milieu, value=milieu in ("Région-Urbain", "Région-Rural"), key=f"milieux_select_{milieu}"):
                     milieux_select.append(milieu)
 
             graph_options = ["Barres", "Radar"]  # des milieux ne forment pas un axe continu : ni lignes ni aires
@@ -2666,7 +2484,6 @@ elif st.session_state.page == "Marche de Travail":
             else:
                 st.warning("⚠ Veuillez sélectionner au moins un milieu et un âge !")
 
-                ###################### taaaab 8
         import streamlit as st
         import pandas as pd
         import plotly.express as px
@@ -2778,7 +2595,7 @@ elif st.session_state.page == "Marche de Travail":
             st.write("### Choisir milieux")
             milieux_multi = []
             for milieu in df_sexe["Milieu"].unique():
-                if st.checkbox(milieu, value=milieu.endswith("Région"), key=f"milieux_multi3_{milieu}"):
+                if st.checkbox(milieu, value=milieu in ("Urbain Région", "Rural Région"), key=f"milieux_multi3_{milieu}"):
                     milieux_multi.append(milieu)
 
             st.write("### Choisir catégories")
@@ -2818,7 +2635,6 @@ elif st.session_state.page == "Marche de Travail":
             else:
                 st.warning("⚠ Veuillez sélectionner au moins un milieu et une catégorie !")
 
-                ################### tab 9
 
         # ================== STYLE ==================
         st.markdown("""
@@ -2940,7 +2756,7 @@ elif st.session_state.page == "Marche de Travail":
             st.write("### Choisir milieux")
             milieux_multi = []
             for milieu in df_secteurs["Milieu"].unique():
-                if st.checkbox(milieu, value=milieu.endswith("Région"), key=f"milieux_multi12_{milieu}"):
+                if st.checkbox(milieu, value=milieu in ("Urbain Région", "Rural Région"), key=f"milieux_multi12_{milieu}"):
                     milieux_multi.append(milieu)
 
             st.write("### Choisir branches")
@@ -2985,7 +2801,6 @@ elif st.session_state.page == "Marche de Travail":
             else:
                 st.warning("⚠ Veuillez sélectionner au moins un milieu et une branche !")
 
-        ############33taaaab ffin
 
         import streamlit as st
         import pandas as pd
@@ -3135,7 +2950,6 @@ elif st.session_state.page == "Marche de Travail":
             else:
                 st.warning("⚠ Veuillez sélectionner au moins un milieu et un statut !")
 
-        ##########33taaaaaaab 10 fffffinnn
 
         st.markdown("""
         <style>
@@ -3252,7 +3066,7 @@ elif st.session_state.page == "Habitat":
             "Logements": [0, 0, 0, 0, 0, None, 0],
             "Restructuration": [7063, 0, 295, 0, 4213, None, 11571],
             "Lots de terrain": [21, 737, 0, 0, 0, None, 758],
-            "Logements_2": [1693, 216, 0, 261, 62, None, 2232],
+            "Logements (2e colonne)": [1693, 216, 0, 261, 62, None, 2232],
             "Activités et Zones Industrielles": [73, 10, 0, 0, 4, None, 87],
             "Cout en Millions de DH": [588, 285, 2, 36, 60, None, 971]
         }
@@ -3265,6 +3079,7 @@ elif st.session_state.page == "Habitat":
         with col1:
             province_select = st.multiselect("Choisir provinces", [p for p in df_ops["Province"].dropna().tolist() if p not in ("Total", "Tata")],
                                              default=[p for p in df_ops["Province"].dropna().tolist() if p not in ("Total", "Tata")], key="province_ops")
+            st.caption("Tata : pas de chiffres publiés pour ce tableau.")
             colonnes_select = st.multiselect("Choisir colonnes", df_ops.columns[1:].tolist(),
                                              default=df_ops.columns[1:2].tolist(), key="colonnes_ops")
             graph_type = st.selectbox("Type de graphique", ["Barres", "Pie", "Treemap"], index=0,
@@ -3292,9 +3107,6 @@ elif st.session_state.page == "Habitat":
                 elif graph_type == "Treemap":
                     fig = px.treemap(df_plot, path=["Catégorie"], values="Valeur", color="Catégorie",
                                      color_discrete_sequence=custom_palette)
-                elif graph_type == "Funnel":
-                    fig = px.funnel(df_plot, x="Valeur", y="Catégorie", color="Catégorie",
-                                    color_discrete_sequence=custom_palette)
                 st.plotly_chart(fig, width="stretch")
             else:
                 st.warning("⚠ Veuillez sélectionner au moins une province et une colonne !")
@@ -3337,7 +3149,7 @@ elif st.session_state.page == "Habitat":
             "Logements": [0, 0, 0, 0],
             "Restructuration": [7395, 0, 2469, 9864],
             "Lots de terrain": [0, 0, 0, 0],
-            "Logements_2": [679, 533, 0, 1212],
+            "Logements (2e colonne)": [679, 533, 0, 1212],
             "Activités et Zones Industrielles": [1743, 50, 0, 1793],
             "Cout en Millions de DH": [385, 104, 25, 514]
         }
@@ -3351,6 +3163,7 @@ elif st.session_state.page == "Habitat":
             province_select = st.multiselect("Choisir provinces", [p for p in df_ops_lancement["Province"].dropna().tolist() if p not in ("Total", "Tata")],
                                              default=[p for p in df_ops_lancement["Province"].dropna().tolist() if p not in ("Total", "Tata")],
                                              key="province_lancement")
+            st.caption("Le tableau ne donne d'opérations en lancement que pour ces trois provinces.")
             colonnes_select = st.multiselect("Choisir colonnes", df_ops_lancement.columns[1:].tolist(),
                                              default=df_ops_lancement.columns[1:2].tolist(), key="colonnes_lancement")
             graph_type = st.selectbox("Type de graphique", ["Barres", "Pie", "Treemap"], index=0,
@@ -3381,9 +3194,6 @@ elif st.session_state.page == "Habitat":
                     elif graph_type == "Treemap":
                         fig = px.treemap(df_plot, path=["Catégorie"], values="Valeur", color="Catégorie",
                                          color_discrete_sequence=custom_palette)
-                    elif graph_type == "Funnel":
-                        fig = px.funnel(df_plot, x="Valeur", y="Catégorie", color="Catégorie",
-                                        color_discrete_sequence=custom_palette)
                     st.plotly_chart(fig, width="stretch")
             else:
                 st.warning("⚠ Veuillez sélectionner au moins une province et une colonne !")
@@ -3399,7 +3209,6 @@ elif st.session_state.page == "Habitat":
 
         # ================== STYLE ==================
 
-        ###################3333 taaaaaab 3
 
         st.markdown("""
                                <style>
@@ -3425,8 +3234,7 @@ elif st.session_state.page == "Habitat":
         # Palette personnalisée pastel un peu plus sombre
         custom_palette = ["#5B5EA6", "#9E7B4C", "#B7415E", "#6B8E23", "#C49BBB", "#88B0AC"]
 
-        # --- Données d'exemple pour opérations en cours d'exécution ---
-        # Remplace df_ops_execution par ton vrai DataFrame
+        # --- Opérations en cours d'exécution (annuaire statistique régional 2017, Habitat) ---
         df_ops_execution = pd.DataFrame({
             "Province": ["Agadir Ida Outanane", "Inezgane Ait Melloul", "Chtouka Ait Baha", "Taroudant", "Tiznit",
                          "Tata"],
@@ -3436,7 +3244,7 @@ elif st.session_state.page == "Habitat":
             "Logements": [0, 0, 210, 0, 0, None],
             "Restructuration": [500, 0, 150, 0, 672, None],
             "Lots de terrain": [25, 994, 4800, 850, 0, None],
-            "Logements 2": [4416, 1228, 100, 96, 111, None],
+            "Logements (2e colonne)": [4416, 1228, 100, 96, 111, None],
             "Activités et Zones Industrielles": [736, 317, 557, 1104, 14, None],
             "Cout en Millions de DH": [2121, 517, 973, 475, 38, None]
         })
@@ -3449,6 +3257,7 @@ elif st.session_state.page == "Habitat":
                 "Choisir provinces", [p for p in df_ops_execution["Province"].dropna().tolist() if p not in ("Total", "Tata")],
                 default=[p for p in df_ops_execution["Province"].dropna().tolist() if p not in ("Total", "Tata")], key="province_execution"
             )
+            st.caption("Tata : pas de chiffres publiés pour ce tableau.")
             colonnes_select = st.multiselect(
                 "Choisir colonnes",
                 df_ops_execution.columns[1:].tolist(),
@@ -3476,12 +3285,6 @@ elif st.session_state.page == "Habitat":
                     if graph_type == "Sunburst":
                         fig = px.sunburst(df_plot, path=["Catégorie"], values="Valeur", color="Catégorie",
                                           color_discrete_sequence=custom_palette)
-                    elif graph_type == "Funnel Area":
-                        fig = px.funnel_area(df_plot, names="Catégorie", values="Valeur", color="Catégorie",
-                                             color_discrete_sequence=custom_palette)
-                    elif graph_type == "Polar (Radar)":
-                        fig = px.line_polar(df_plot, r="Valeur", theta="Catégorie", line_close=True, markers=True,
-                                            color="Catégorie", color_discrete_sequence=custom_palette)
                     elif graph_type == "Barres":
                         fig = px.bar(df_plot, x="Catégorie", y="Valeur", color="Catégorie", text="Valeur",
                                      color_discrete_sequence=custom_palette)
@@ -3531,7 +3334,7 @@ elif st.session_state.page == "Habitat":
             "Logements": [0, 0, 0, 400, 0, None, 400],
             "Restructuration": [0, 0, 0, 0, 0, None, 0],
             "Lots de terrain": [25204, 0, 117, 0, 0, None, 25321],
-            "Logements_2": [4364, 500, 340, 0, 300, None, 5504],
+            "Logements (2e colonne)": [4364, 500, 340, 0, 300, None, 5504],
             "Activités et Zones Industrielles": [0, 222, 0, 0, 0, None, 222],
             "Cout en Millions de DH": [5815, 110, 77, 40, 55, None, 6097]
         }
@@ -3545,6 +3348,7 @@ elif st.session_state.page == "Habitat":
             st.markdown("<br><br>", unsafe_allow_html=True)
             province_select = st.multiselect("Choisir provinces", [p for p in df_ops_etude["Province"].dropna().tolist() if p not in ("Total", "Tata")],
                                              default=[p for p in df_ops_etude["Province"].dropna().tolist() if p not in ("Total", "Tata")], key="province_etude")
+            st.caption("Tata : pas de chiffres publiés pour ce tableau.")
             colonnes_select = st.multiselect("Choisir colonnes", df_ops_etude.columns[1:].tolist(),
                                              default=df_ops_etude.columns[1:2].tolist(), key="colonnes_etude")
             graph_type = st.selectbox("Type de graphique",
@@ -3569,12 +3373,6 @@ elif st.session_state.page == "Habitat":
                     if graph_type == "Sunburst":
                         fig = px.sunburst(df_plot, path=["Catégorie"], values="Valeur", color="Catégorie",
                                           color_discrete_sequence=custom_palette)
-                    elif graph_type == "Funnel Area":
-                        fig = px.funnel_area(df_plot, names="Catégorie", values="Valeur", color="Catégorie",
-                                             color_discrete_sequence=custom_palette)
-                    elif graph_type == "Polar (Radar)":
-                        fig = px.line_polar(df_plot, r="Valeur", theta="Catégorie", line_close=True, markers=True,
-                                            color="Catégorie", color_discrete_sequence=custom_palette)
                     elif graph_type == "Barres":
                         fig = px.bar(df_plot, x="Catégorie", y="Valeur", color="Catégorie", text="Valeur",
                                      color_discrete_sequence=custom_palette)
@@ -3647,7 +3445,7 @@ elif st.session_state.page == "Habitat":
                 "Logements": [0, 0, 0, 0, 0, None, 0],
                 "Restructuration": [7063, 0, 295, 0, 4213, None, 11571],
                 "Lots de terrain": [21, 737, 0, 0, 0, None, 758],
-                "Logements_2": [1693, 216, 0, 261, 62, None, 2232],
+                "Logements (2e colonne)": [1693, 216, 0, 261, 62, None, 2232],
                 "Activités et Zones Industrielles": [73, 10, 0, 0, 4, None, 87],
                 "Cout en Millions de DH": [588, 285, 2, 36, 60, None, 971]
             },
@@ -3659,7 +3457,7 @@ elif st.session_state.page == "Habitat":
                 "Logements": [0, 0, 0, 0],
                 "Restructuration": [7395, 0, 2469, 9864],
                 "Lots de terrain": [0, 0, 0, 0],
-                "Logements_2": [679, 533, 0, 1212],
+                "Logements (2e colonne)": [679, 533, 0, 1212],
                 "Activités et Zones Industrielles": [1743, 50, 0, 1793],
                 "Cout en Millions de DH": [385, 104, 25, 514]
             },
@@ -3672,7 +3470,7 @@ elif st.session_state.page == "Habitat":
                 "Logements": [0, 0, 210, 0, 0, None],
                 "Restructuration": [500, 0, 150, 0, 672, None],
                 "Lots de terrain": [25, 994, 4800, 850, 0, None],
-                "Logements_2": [4416, 1228, 100, 96, 111, None],
+                "Logements (2e colonne)": [4416, 1228, 100, 96, 111, None],
                 "Activités et Zones Industrielles": [736, 317, 557, 1104, 14, None],
                 "Cout en Millions de DH": [2121, 517, 973, 475, 38, None]
             },
@@ -3686,7 +3484,7 @@ elif st.session_state.page == "Habitat":
                 "Logements": [0, 0, 0, 400, 0, None, 400],
                 "Restructuration": [0, 0, 0, 0, 0, None, 0],
                 "Lots de terrain": [25204, 0, 117, 0, 0, None, 25321],
-                "Logements_2": [4364, 500, 340, 0, 300, None, 5504],
+                "Logements (2e colonne)": [4364, 500, 340, 0, 300, None, 5504],
                 "Activités et Zones Industrielles": [0, 222, 0, 0, 0, None, 222],
                 "Cout en Millions de DH": [5815, 110, 77, 40, 55, None, 6097]
             }
@@ -3716,7 +3514,7 @@ elif st.session_state.page == "Habitat":
             final_df = pd.concat(all_records, ignore_index=True)
             final_df = final_df[final_df['Province'] != 'Total'].copy()
             final_df['Valeur'] = pd.to_numeric(final_df['Valeur'], errors='coerce')
-            final_df.dropna(subset=['Valeur'], inplace=True)
+            final_df = final_df.dropna(subset=['Valeur'])
             return final_df
 
 
@@ -3791,7 +3589,7 @@ elif st.session_state.page == "Habitat":
                         color="Valeur",
                         hover_name="Province",
                         hover_data={"Valeur": ':,.0f'},
-                        mapbox_style="open-street-map",  # <-- MODIFIÉ ICI
+                        mapbox_style="open-street-map",
                         center={"lat": 30.2, "lon": -9.0},
                         zoom=6.5,
                         opacity=0.75,
@@ -3922,6 +3720,35 @@ elif st.session_state.page == "Finance":
         """, unsafe_allow_html=True)
 
         # ================== DONNÉES ==================
+        # Des indicateurs d'unités différentes (emplois, millions de DH, nombre de projets) ne se
+        # partagent pas un axe et ne s'additionnent pas : un panneau par indicateur, axe propre.
+        import textwrap
+
+        def barres_par_indicateur(df_long, x, palette, kind="bar"):
+            n = df_long["Colonne"].nunique()
+            trace = px.bar if kind == "bar" else px.line
+            extra = {} if kind == "bar" else {"markers": True}
+            fig = trace(df_long, x=x, y="Valeur", color="Colonne", facet_col="Colonne",
+                        facet_col_wrap=min(n, 3), facet_col_spacing=0.08,
+                        color_discrete_sequence=palette, **extra)
+            fig.update_yaxes(matches=None, showticklabels=True, title=None)
+            fig.for_each_annotation(lambda a: a.update(
+                text="<br>".join(textwrap.wrap(a.text.split("=", 1)[-1], 22)), font=dict(size=11)))
+            fig.update_xaxes(title=None)
+            fig.update_layout(showlegend=False)
+            return fig
+
+        def camemberts_par_indicateur(df_long, noms, palette):
+            """Un camembert par indicateur : chaque indicateur se répartit entre les territoires."""
+            cols = df_long["Colonne"].unique().tolist()
+            fig = go.Figure()
+            for k, c in enumerate(cols):
+                d = df_long[df_long["Colonne"] == c]
+                fig.add_trace(go.Pie(labels=d[noms], values=d["Valeur"], title=c, hole=0.3,
+                                     textinfo="percent", marker=dict(colors=palette),
+                                     domain=dict(x=[k / len(cols), (k + 1) / len(cols) - 0.02])))
+            return fig
+
         data_banques = {
             "Province": ["Agadir Ida Outanane", "Inezgane Ait Melloul", "Chtouka Ait Baha",
                          "Taroudant", "Tiznit", "Tata"],
@@ -3958,8 +3785,8 @@ elif st.session_state.page == "Finance":
             )
             graph_type = st.selectbox(
                 "Type de graphique",
-                ["Barres empilées", "Bar Groupé", "Treemap", "Pie Chart", "Sunburst", "Polar (Radar)"],
-                index=1,
+                ["Barres groupées", "Parts par province", "Crédits / dépôts (%)"],
+                index=0,
                 key="graph_banques"
             )
 
@@ -3974,33 +3801,24 @@ elif st.session_state.page == "Finance":
                 if df_long.empty:
                     st.warning("⚠ Aucune donnée valide à afficher pour la sélection actuelle.")
                 else:
-                    if graph_type == "Sunburst":
-                        fig = px.sunburst(df_long, path=["Province", "Colonne"], values="Valeur",
-                                          color="Colonne", color_discrete_sequence=custom_palette)
-                        fig.update_traces(textinfo="none")
-                    elif graph_type == "Treemap":
-                        fig = px.treemap(df_long, path=["Province", "Colonne"], values="Valeur",
-                                         color="Colonne", color_discrete_sequence=custom_palette)
-                        fig.update_traces(textinfo="none")
-                    elif graph_type == "Pie Chart":
-                        fig = px.pie(df_long, names="Colonne", values="Valeur",
-                                     color="Colonne", color_discrete_sequence=custom_palette)
-                        fig.update_traces(textinfo="none")
-                    elif graph_type == "Polar (Radar)":
-                        fig = px.line_polar(df_long, r="Valeur", theta="Colonne", line_close=True, markers=True,
-                                            color="Colonne", color_discrete_sequence=custom_palette)
-                    elif graph_type == "Barres empilées":
-                        fig = px.bar(df_long, x="Province", y="Valeur", color="Colonne",
-                                     barmode="stack", color_discrete_sequence=custom_palette)
-                    elif graph_type == "Bar Groupé":
+                    # Dépôts et crédits sont deux grandeurs distinctes : on les compare côte à côte,
+                    # on ne les additionne jamais (pas d'empilement, de treemap ni de camembert commun).
+                    if graph_type == "Barres groupées":
                         fig = px.bar(df_long, x="Province", y="Valeur", color="Colonne",
                                      barmode="group", color_discrete_sequence=custom_palette)
-
+                    elif graph_type == "Parts par province":
+                        fig = camemberts_par_indicateur(df_long, "Province", px.colors.qualitative.Pastel)
+                    else:
+                        d = df_banques[df_banques["Province"].isin(province_select)]
+                        ratio = (100 * d["Montant des crédits (en milliers)"]
+                                 / d["Montant des dépôts (en milliers)"]).round(1)
+                        fig = px.bar(x=d["Province"], y=ratio, text=ratio,
+                                     labels={"x": "", "y": "Crédits / dépôts (%)"},
+                                     color_discrete_sequence=custom_palette)
                     fig.update_layout(
                         font=dict(family="Arial", size=12, color="#000000"),
                         height=400,
                         width=1000,
-                        showlegend=True,
                         xaxis_title=None,
                         yaxis_title=None,
                         xaxis=dict(showticklabels=True),
@@ -4016,7 +3834,6 @@ elif st.session_state.page == "Finance":
             st.markdown("<br><br><br><br><br>", unsafe_allow_html=True)
             st.dataframe(df_banques, width="stretch")
 
-        #############tab 2
 
         # ================== DONNÉES ==================
         data_projets = {
@@ -4044,8 +3861,8 @@ elif st.session_state.page == "Finance":
             st.markdown("<br><br>", unsafe_allow_html=True)
             province_select_proj = st.multiselect(
                 "Choisir provinces",
-                df_projets["Provinces"].tolist(),
-                default=df_projets["Provinces"].tolist(),
+                [p for p in df_projets["Provinces"] if p != "Total"],
+                default=[p for p in df_projets["Provinces"] if p != "Total"],
                 key="province_projets"
             )
             colonnes_select_proj = st.multiselect(
@@ -4056,9 +3873,8 @@ elif st.session_state.page == "Finance":
             )
             graph_type_proj = st.selectbox(
                 "Type de graphique",
-                ["Barres empilées", "Bar Groupé", "Treemap", "Pie Chart", "Sunburst", "Polar (Radar)", "Line Chart",
-                 "Area Chart"],
-                index=7,
+                ["Barres par indicateur", "Parts par province"],
+                index=0,
                 key="graph_projets"
             )
 
@@ -4077,39 +3893,14 @@ elif st.session_state.page == "Finance":
                 if df_long_proj.empty:
                     st.warning("⚠ Aucune donnée valide à afficher pour la sélection actuelle.")
                 else:
-                    if graph_type_proj == "Sunburst":
-                        fig = px.sunburst(df_long_proj, path=["Provinces", "Colonne"], values="Valeur",
-                                          color="Colonne", color_discrete_sequence=custom_palette_pastel)
-                        fig.update_traces(textinfo="none")
-                    elif graph_type_proj == "Treemap":
-                        fig = px.treemap(df_long_proj, path=["Provinces", "Colonne"], values="Valeur",
-                                         color="Colonne", color_discrete_sequence=custom_palette_pastel)
-                        fig.update_traces(textinfo="none")
-                    elif graph_type_proj == "Pie Chart":
-                        fig = px.pie(df_long_proj, names="Colonne", values="Valeur",
-                                     color="Colonne", color_discrete_sequence=custom_palette_pastel)
-                        fig.update_traces(textinfo="none")
-                    elif graph_type_proj == "Polar (Radar)":
-                        fig = px.line_polar(df_long_proj, r="Valeur", theta="Colonne", line_close=True, markers=True,
-                                            color="Colonne", color_discrete_sequence=custom_palette_pastel)
-                    elif graph_type_proj == "Barres empilées":
-                        fig = px.bar(df_long_proj, x="Provinces", y="Valeur", color="Colonne",
-                                     barmode="stack", color_discrete_sequence=custom_palette_pastel)
-                    elif graph_type_proj == "Bar Groupé":
-                        fig = px.bar(df_long_proj, x="Provinces", y="Valeur", color="Colonne",
-                                     barmode="group", color_discrete_sequence=custom_palette_pastel)
-                    elif graph_type_proj == "Line Chart":
-                        fig = px.line(df_long_proj, x="Provinces", y="Valeur", color="Colonne",
-                                      markers=True, color_discrete_sequence=custom_palette_pastel)
-                    elif graph_type_proj == "Area Chart":
-                        fig = px.area(df_long_proj, x="Provinces", y="Valeur", color="Colonne",
-                                      color_discrete_sequence=custom_palette_pastel)
-
+                    if graph_type_proj == "Barres par indicateur":
+                        fig = barres_par_indicateur(df_long_proj, "Provinces", custom_palette_pastel)
+                    else:
+                        fig = camemberts_par_indicateur(df_long_proj, "Provinces", px.colors.qualitative.Pastel)
                     fig.update_layout(
                         font=dict(family="Arial", size=12, color="#000000"),
                         height=400,
                         width=1000,
-                        showlegend=True,
                         xaxis_title=None,
                         yaxis_title=None,
                         xaxis=dict(showticklabels=True),
@@ -4125,7 +3916,6 @@ elif st.session_state.page == "Finance":
             st.markdown("<br><br><br><br><br>", unsafe_allow_html=True)
             st.dataframe(df_projets, width="stretch")
 
-            ########## taaaaaaaab 3
         data_sectoriel = {
             "Secteur d’Activité": ["Tourisme", "Services", "Commerce", "BTP", "Mines", "Industrie", "Artisanat"],
             "Investissement (millions de DH)": [6714, 5285, 519, 4561, 167, 711, 4],
@@ -4161,9 +3951,8 @@ elif st.session_state.page == "Finance":
 
             graph_type_sectoriel = st.selectbox(
                 "Type de graphique",
-                ["Barres groupées", "Barres empilées", "Courbes multiples", "Scatter multi-dimension", "Pie Chart",
-                 "Treemap"],
-                index=5,
+                ["Barres par indicateur", "Investissement et emplois", "Pie Chart", "Treemap"],
+                index=0,
                 key="graph_sectoriel"
             )
 
@@ -4172,47 +3961,34 @@ elif st.session_state.page == "Finance":
             if not indicateurs_select:
                 st.warning("⚠ Veuillez sélectionner au moins un indicateur !")
             else:
-                if graph_type_sectoriel == "Barres groupées":
-                    fig = px.bar(df_sectoriel, x="Secteur d’Activité", y=indicateurs_select,
-                                 barmode="group",
-                                 color_discrete_sequence=custom_palette_sectoriel[:len(indicateurs_select)])
+                df_sect = df_sectoriel[df_sectoriel["Secteur d’Activité"].isin(secteurs_select)]
+                if df_sect.empty:
+                    st.warning("⚠ Veuillez sélectionner au moins un secteur !")
+                elif graph_type_sectoriel == "Barres par indicateur":
+                    d = df_sect.melt(id_vars="Secteur d’Activité", value_vars=indicateurs_select,
+                                     var_name="Colonne", value_name="Valeur")
+                    st.plotly_chart(barres_par_indicateur(d, "Secteur d’Activité", custom_palette_sectoriel),
+                                    width="stretch")
+                elif graph_type_sectoriel == "Investissement et emplois":
+                    fig = px.scatter(df_sect, x="Investissement (millions de DH)", y="Emplois à créer",
+                                     text="Secteur d’Activité", color_discrete_sequence=custom_palette_sectoriel)
+                    fig.update_traces(textposition="top center", marker=dict(size=12))
                     st.plotly_chart(fig, width="stretch")
-                elif graph_type_sectoriel == "Barres empilées":
-                    fig = px.bar(df_sectoriel, x="Secteur d’Activité", y=indicateurs_select,
-                                 barmode="stack",
-                                 color_discrete_sequence=custom_palette_sectoriel[:len(indicateurs_select)])
-                    st.plotly_chart(fig, width="stretch")
-                elif graph_type_sectoriel == "Courbes multiples":
-                    fig = px.line(df_sectoriel, x="Secteur d’Activité", y=indicateurs_select, markers=True,
-                                  color_discrete_sequence=custom_palette_sectoriel[:len(indicateurs_select)])
-                    st.plotly_chart(fig, width="stretch")
-                elif graph_type_sectoriel == "Scatter multi-dimension":
-                    x_col = indicateurs_select[0] if len(indicateurs_select) > 0 else indicateurs_select[0]
-                    y_col = indicateurs_select[1] if len(indicateurs_select) > 1 else indicateurs_select[0]
-                    size_col = indicateurs_select[1] if len(indicateurs_select) > 1 else indicateurs_select[0]
-                    color_col = indicateurs_select[0]
-                    fig = px.scatter(df_sectoriel, x=x_col, y=y_col, size=size_col, color=color_col,
-                                     text="Secteur d’Activité",
+                else:
+                    ind = indicateurs_select[0]
+                    if len(indicateurs_select) > 1:
+                        st.caption(f"Un camembert ou une treemap montre un seul indicateur : {ind}.")
+                    if graph_type_sectoriel == "Pie Chart":
+                        fig = px.pie(df_sect, names="Secteur d’Activité", values=ind, title=ind,
                                      color_discrete_sequence=custom_palette_sectoriel)
-                    fig.update_traces(textposition="top center")
+                    else:
+                        fig = px.treemap(df_sect, path=["Secteur d’Activité"], values=ind, title=ind,
+                                         color="Secteur d’Activité", color_discrete_sequence=custom_palette_sectoriel)
                     st.plotly_chart(fig, width="stretch")
-                elif graph_type_sectoriel == "Pie Chart":
-                    if len(indicateurs_select) > 0:
-                        fig = px.pie(df_sectoriel, names="Secteur d’Activité", values=indicateurs_select[0],
-                                     color_discrete_sequence=custom_palette_sectoriel)
-                        st.plotly_chart(fig, width="stretch")
-                elif graph_type_sectoriel == "Treemap":
-                    if len(indicateurs_select) > 0:
-                        fig = px.treemap(df_sectoriel, path=["Secteur d’Activité"], values=indicateurs_select[0],
-                                         color="Secteur d’Activité",
-                                         color_discrete_sequence=custom_palette_sectoriel)
-                        st.plotly_chart(fig, width="stretch")
-
         with col3s:
             st.markdown("<br><br><br><br><br>", unsafe_allow_html=True)
             st.dataframe(df_sectoriel, width="stretch")
 
-        ######################## taaaaaaaaabbbb 4
 
         data_entreprises = {
             "Année": ["2017", "2016", "2015"],
@@ -4221,7 +3997,7 @@ elif st.session_state.page == "Finance":
             "Nombre de projets ": [684, 572, 562]
         }
 
-        df_entreprises = pd.DataFrame(data_entreprises)
+        df_entreprises = pd.DataFrame(data_entreprises).sort_values("Année").reset_index(drop=True)
 
         # ================== PALETTE PASTEL ==================
 
@@ -4249,9 +4025,8 @@ elif st.session_state.page == "Finance":
             # --- Choix du type de graphique ---
             graph_type_entreprises = st.selectbox(
                 "Type de graphique",
-                ["Barres groupées", "Barres empilées", "Courbes multiples", "Scatter multi-dimension", "Pie Chart",
-                 "Treemap"],
-                index=2,
+                ["Barres par indicateur", "Courbes par indicateur"],
+                index=0,
                 key="graph_entreprises"
             )
 
@@ -4260,52 +4035,15 @@ elif st.session_state.page == "Finance":
             if not indicateurs_select:
                 st.warning("⚠ Veuillez sélectionner au moins un indicateur !")
             else:
-                if graph_type_entreprises == "Barres groupées":
-                    fig = px.bar(df_entreprises, x="Année", y=indicateurs_select,
-                                 barmode="group",
-                                 color_discrete_sequence=custom_palette_entreprises[:len(indicateurs_select)])
-                    st.plotly_chart(fig, width="stretch")
-
-                elif graph_type_entreprises == "Barres empilées":
-                    fig = px.bar(df_entreprises, x="Année", y=indicateurs_select,
-                                 barmode="stack",
-                                 color_discrete_sequence=custom_palette_entreprises[:len(indicateurs_select)])
-                    st.plotly_chart(fig, width="stretch")
-
-                elif graph_type_entreprises == "Courbes multiples":
-                    fig = px.line(df_entreprises, x="Année", y=indicateurs_select, markers=True,
-                                  color_discrete_sequence=custom_palette_entreprises[:len(indicateurs_select)])
-                    st.plotly_chart(fig, width="stretch")
-
-                elif graph_type_entreprises == "Scatter multi-dimension":
-                    x_col = indicateurs_select[0]
-                    y_col = indicateurs_select[1] if len(indicateurs_select) > 1 else indicateurs_select[0]
-                    size_col = indicateurs_select[1] if len(indicateurs_select) > 1 else indicateurs_select[0]
-                    color_col = indicateurs_select[0]
-                    fig = px.scatter(df_entreprises, x=x_col, y=y_col, size=size_col, color=color_col,
-                                     text="Année",
-                                     color_discrete_sequence=custom_palette_entreprises)
-                    fig.update_traces(textposition="top center")
-                    st.plotly_chart(fig, width="stretch")
-
-                elif graph_type_entreprises == "Pie Chart":
-                    if len(indicateurs_select) > 0:
-                        fig = px.pie(df_entreprises, names="Année", values=indicateurs_select[0],
-                                     color_discrete_sequence=custom_palette_entreprises)
-                        st.plotly_chart(fig, width="stretch")
-
-                elif graph_type_entreprises == "Treemap":
-                    if len(indicateurs_select) > 0:
-                        fig = px.treemap(df_entreprises, path=["Année"], values=indicateurs_select[0],
-                                         color="Année",
-                                         color_discrete_sequence=custom_palette_entreprises)
-                        st.plotly_chart(fig, width="stretch")
-
+                d = df_entreprises.melt(id_vars="Année", value_vars=indicateurs_select,
+                                        var_name="Colonne", value_name="Valeur")
+                kind = "bar" if graph_type_entreprises == "Barres par indicateur" else "line"
+                st.plotly_chart(barres_par_indicateur(d, "Année", custom_palette_entreprises, kind=kind),
+                                width="stretch")
         with col3e:
             st.markdown("<br><br><br><br><br>", unsafe_allow_html=True)
             st.dataframe(df_entreprises, width="stretch")
 
-            ############ taaaaab 5
 
         data_secteurs = {
             "Secteur d’Activité": [
@@ -4354,8 +4092,7 @@ elif st.session_state.page == "Finance":
             # --- Choix du type de graphique ---
             graph_type_secteurs = st.selectbox(
                 "Type de graphique",
-                ["Barres groupées", "Barres empilées", "Courbes multiples", "Scatter multi-dimension", "Pie Chart",
-                 "Treemap"],
+                ["Barres groupées", "Scatter", "Pie Chart", "Treemap"],
                 index=0,
                 key="graph_secteurs"
             )
@@ -4365,28 +4102,19 @@ elif st.session_state.page == "Finance":
             if not indicateurs_select_secteurs:
                 st.warning("⚠ Veuillez sélectionner au moins un indicateur !")
             else:
-                if graph_type_secteurs == "Barres groupées":
-                    fig = px.bar(df_secteurs, x="Secteur d’Activité", y=indicateurs_select_secteurs,
+                if df_filtered.empty:
+                    st.warning("⚠ Veuillez sélectionner au moins un secteur !")
+                elif graph_type_secteurs == "Barres groupées":
+                    fig = px.bar(df_filtered, x="Secteur d’Activité", y=indicateurs_select_secteurs,
                                  barmode="group",
                                  color_discrete_sequence=custom_palette_secteurs[:len(indicateurs_select_secteurs)])
                     st.plotly_chart(fig, width="stretch")
 
-                elif graph_type_secteurs == "Barres empilées":
-                    fig = px.bar(df_secteurs, x="Secteur d’Activité", y=indicateurs_select_secteurs,
-                                 barmode="stack",
-                                 color_discrete_sequence=custom_palette_secteurs[:len(indicateurs_select_secteurs)])
-                    st.plotly_chart(fig, width="stretch")
-
-                elif graph_type_secteurs == "Courbes multiples":
-                    fig = px.line(df_secteurs, x="Secteur d’Activité", y=indicateurs_select_secteurs, markers=True,
-                                  color_discrete_sequence=custom_palette_secteurs[:len(indicateurs_select_secteurs)])
-                    st.plotly_chart(fig, width="stretch")
-
-                elif graph_type_secteurs == "Scatter multi-dimension":
+                elif graph_type_secteurs == "Scatter":
                     x_col = indicateurs_select_secteurs[0]
                     y_col = indicateurs_select_secteurs[1] if len(indicateurs_select_secteurs) > 1 else \
                         indicateurs_select_secteurs[0]
-                    fig = px.scatter(df_secteurs, x=x_col, y=y_col, size=y_col, color="Secteur d’Activité",
+                    fig = px.scatter(df_filtered, x=x_col, y=y_col, size=y_col, color="Secteur d’Activité",
                                      text="Secteur d’Activité",
                                      color_discrete_sequence=custom_palette_secteurs)
                     fig.update_traces(textposition="top center")
@@ -4394,15 +4122,17 @@ elif st.session_state.page == "Finance":
 
                 elif graph_type_secteurs == "Pie Chart":
                     if len(indicateurs_select_secteurs) == 1:
-                        fig = px.pie(df_secteurs, names="Secteur d’Activité", values=indicateurs_select_secteurs[0],
+                        fig = px.pie(df_filtered, names="Secteur d’Activité", values=indicateurs_select_secteurs[0],
                                      color_discrete_sequence=custom_palette_secteurs)
                         st.plotly_chart(fig, width="stretch")
+                        if len(df_filtered) < len(df_secteurs):
+                            st.caption("Parts recalculées sur les secteurs sélectionnés seulement.")
                     else:
                         st.warning("⚠ Sélectionnez un seul indicateur pour le camembert.")
 
                 elif graph_type_secteurs == "Treemap":
                     if len(indicateurs_select_secteurs) == 1:
-                        fig = px.treemap(df_secteurs, path=["Secteur d’Activité"],
+                        fig = px.treemap(df_filtered, path=["Secteur d’Activité"],
                                          values=indicateurs_select_secteurs[0],
                                          color="Secteur d’Activité",
                                          color_discrete_sequence=custom_palette_secteurs)
@@ -4414,7 +4144,6 @@ elif st.session_state.page == "Finance":
             st.markdown("<br><br><br><br><br><br>", unsafe_allow_html=True)
             st.dataframe(df_secteurs, width="stretch")
 
-            ######## taaaaaaaaaaaaab 6
         # ================== DATA ==================
 
         # Palette pastel
@@ -4468,15 +4197,13 @@ elif st.session_state.page == "Finance":
                 "Type de graphique",
                 [
                     "Barres groupées",
-                    "Barres empilées",
-                    "Courbes multiples",
                     "Scatter multi-dimension",
                     "Pie Chart",
                     "Treemap",
                     "Radar Chart",
                     "Heatmap"
                 ],
-                index=7,
+                index=5,
                 key="graph_pib"
             )
 
@@ -4491,17 +4218,6 @@ elif st.session_state.page == "Finance":
                     fig = px.bar(df_filtered, x="Secteurs", y=indicateurs_select_pib,
                                  barmode="group",
                                  color_discrete_sequence=custom_palette_pib[:len(indicateurs_select_pib)])
-                    st.plotly_chart(fig, width="stretch")
-
-                elif graph_type_pib == "Barres empilées":
-                    fig = px.bar(df_filtered, x="Secteurs", y=indicateurs_select_pib,
-                                 barmode="stack",
-                                 color_discrete_sequence=custom_palette_pib[:len(indicateurs_select_pib)])
-                    st.plotly_chart(fig, width="stretch")
-
-                elif graph_type_pib == "Courbes multiples":
-                    fig = px.line(df_filtered, x="Secteurs", y=indicateurs_select_pib, markers=True,
-                                  color_discrete_sequence=custom_palette_pib[:len(indicateurs_select_pib)])
                     st.plotly_chart(fig, width="stretch")
 
                 elif graph_type_pib == "Scatter multi-dimension":
@@ -4636,7 +4352,7 @@ elif st.session_state.page == "Finance":
             df_dc_melted["Thème"] = "Activité Bancaire"
 
             df_pi = pd.DataFrame(data["projets_investissement_2017"])
-            df_pi.rename(columns={"Provinces": "Province"}, inplace=True)
+            df_pi = df_pi.rename(columns={"Provinces": "Province"})
             df_pi_melted = df_pi.melt(id_vars="Province", var_name="Indicateur", value_name="Valeur")
             df_pi_melted["Thème"] = "Projets d'Investissement (2017)"
 
@@ -4816,6 +4532,8 @@ elif st.session_state.page == "Enseignement":
 
         df_2017 = pd.DataFrame(data_2017)
         df_2018 = pd.DataFrame(data_2018)
+        df_2017_tableau, df_2018_tableau = df_2017, df_2018  # tableaux affichés, avec la ligne régionale
+        df_2017, df_2018 = sans_agregats(df_2017, "Province"), sans_agregats(df_2018, "Province")  # données tracées
 
         # Fusion des 2 années
         df_all = pd.merge(df_2017, df_2018, on="Province")
@@ -4837,7 +4555,7 @@ elif st.session_state.page == "Enseignement":
             show_total = st.checkbox("Afficher Total", True, key="chk3")
 
             # --- nouveau : choix du type de graphe ---
-            graph_type_viz = st.selectbox("Type de graphique", ["Barre", "Ligne", "Aire", "Nuage de points"], index=2)
+            graph_type_viz = st.selectbox("Type de graphique", ["Barre", "Nuage de points"], index=0, key="ens_graph_viz_1")
 
         with col2:
             if year == "2017":
@@ -4860,12 +4578,6 @@ elif st.session_state.page == "Enseignement":
                 if graph_type_viz == "Barre":
                     fig = px.bar(df_melted, x="Province", y="Valeur", color="Catégorie", barmode="group",
                                  color_discrete_sequence=["#5c5470", "#6a7b76", "#8d99ae"])
-                elif graph_type_viz == "Ligne":
-                    fig = px.line(df_melted, x="Province", y="Valeur", color="Catégorie", markers=True,
-                                  color_discrete_sequence=["#5c5470", "#6a7b76", "#8d99ae"])
-                elif graph_type_viz == "Aire":
-                    fig = px.area(df_melted, x="Province", y="Valeur", color="Catégorie",
-                                  color_discrete_sequence=["#5c5470", "#6a7b76", "#8d99ae"])
                 elif graph_type_viz == "Nuage de points":
                     fig = px.scatter(df_melted, x="Province", y="Valeur", color="Catégorie", size="Valeur",
                                      color_discrete_sequence=["#5c5470", "#6a7b76", "#8d99ae"])
@@ -4875,7 +4587,7 @@ elif st.session_state.page == "Enseignement":
                 st.info("Veuillez sélectionner au moins un indicateur.")
 
         with col3:
-            st.dataframe(df_plot)
+            st.dataframe(df_2017_tableau if year == "2017" else df_2018_tableau)
 
         # --- COMPARAISON ---
         st.markdown("""
@@ -4903,7 +4615,7 @@ elif st.session_state.page == "Enseignement":
 
             # --- nouveau : choix type de graphe comparaison ---
             graph_type_comp = st.selectbox("Type de graphique comparatif",
-                                           ["Barre", "Ligne", "Aire", "Nuage de points"], index=0)
+                                           ["Barre", "Nuage de points"], index=0, key="ens_graph_comp_1")
 
         with col3c:
             df_compare = df_all.copy()
@@ -4920,14 +4632,6 @@ elif st.session_state.page == "Enseignement":
                     fig2 = px.bar(df_melted, x="Province", y="Valeur", color="Catégorie", barmode="group",
                                   color_discrete_sequence=["#3a506b", "#5c677d", "#9a8c98", "#8d99ae", "#6d6875",
                                                            "#4a4e69"])
-                elif graph_type_comp == "Ligne":
-                    fig2 = px.line(df_melted, x="Province", y="Valeur", color="Catégorie", markers=True,
-                                   color_discrete_sequence=["#3a506b", "#5c677d", "#9a8c98", "#8d99ae", "#6d6875",
-                                                            "#4a4e69"])
-                elif graph_type_comp == "Aire":
-                    fig2 = px.area(df_melted, x="Province", y="Valeur", color="Catégorie",
-                                   color_discrete_sequence=["#3a506b", "#5c677d", "#9a8c98", "#8d99ae", "#6d6875",
-                                                            "#4a4e69"])
                 elif graph_type_comp == "Nuage de points":
                     fig2 = px.scatter(df_melted, x="Province", y="Valeur", color="Catégorie", size="Valeur",
                                       color_discrete_sequence=["#3a506b", "#5c677d", "#9a8c98", "#8d99ae", "#6d6875",
@@ -4937,7 +4641,6 @@ elif st.session_state.page == "Enseignement":
             else:
                 st.info("Veuillez sélectionner au moins un indicateur.")
 
-        ####### taaaaaaaab 2
         import streamlit as st
         import pandas as pd
         import plotly.express as px
@@ -4961,6 +4664,8 @@ elif st.session_state.page == "Enseignement":
 
         df_2017 = pd.DataFrame(data_2017)
         df_2018 = pd.DataFrame(data_2018)
+        df_2017_tableau, df_2018_tableau = df_2017, df_2018  # tableaux affichés, avec la ligne régionale
+        df_2017, df_2018 = sans_agregats(df_2017, "Province"), sans_agregats(df_2018, "Province")  # données tracées
 
         # Fusion des 2 années
         df_all = pd.merge(df_2017, df_2018, on="Province")
@@ -4983,7 +4688,7 @@ elif st.session_state.page == "Enseignement":
             show_total = st.checkbox("Afficher Total", True, key="chk13")
 
             # --- nouveau : choix du type de graphe ---
-            graph_type_viz = st.selectbox("Type de graphique", ["Barre", "Ligne", "Aire", "Nuage de points"], index=1)
+            graph_type_viz = st.selectbox("Type de graphique", ["Barre", "Nuage de points"], index=0, key="ens_graph_viz_2")
 
         with col2:
             if year == "2017":
@@ -5007,12 +4712,6 @@ elif st.session_state.page == "Enseignement":
                 if graph_type_viz == "Barre":
                     fig = px.bar(df_melted, x="Province", y="Valeur", color="Catégorie", barmode="group",
                                  color_discrete_sequence=palette_viz)
-                elif graph_type_viz == "Ligne":
-                    fig = px.line(df_melted, x="Province", y="Valeur", color="Catégorie", markers=True,
-                                  color_discrete_sequence=palette_viz)
-                elif graph_type_viz == "Aire":
-                    fig = px.area(df_melted, x="Province", y="Valeur", color="Catégorie",
-                                  color_discrete_sequence=palette_viz)
                 elif graph_type_viz == "Nuage de points":
                     fig = px.scatter(df_melted, x="Province", y="Valeur", color="Catégorie", size="Valeur",
                                      color_discrete_sequence=palette_viz)
@@ -5023,7 +4722,7 @@ elif st.session_state.page == "Enseignement":
 
         with col3:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
-            st.dataframe(df_plot)
+            st.dataframe(df_2017_tableau if year == "2017" else df_2018_tableau)
 
         # --- COMPARAISON ---
         st.markdown("""
@@ -5052,7 +4751,7 @@ elif st.session_state.page == "Enseignement":
 
             # --- nouveau : choix type de graphe comparaison ---
             graph_type_comp = st.selectbox("Type de graphique comparatif",
-                                           ["Barre", "Ligne", "Aire", "Nuage de points"], index=3)
+                                           ["Barre", "Nuage de points"], index=0, key="ens_graph_comp_2")
 
         with col3c:
             df_compare = df_all.copy()
@@ -5070,12 +4769,6 @@ elif st.session_state.page == "Enseignement":
                 if graph_type_comp == "Barre":
                     fig2 = px.bar(df_melted, x="Province", y="Valeur", color="Catégorie", barmode="group",
                                   color_discrete_sequence=palette_comp)
-                elif graph_type_comp == "Ligne":
-                    fig2 = px.line(df_melted, x="Province", y="Valeur", color="Catégorie", markers=True,
-                                   color_discrete_sequence=palette_comp)
-                elif graph_type_comp == "Aire":
-                    fig2 = px.area(df_melted, x="Province", y="Valeur", color="Catégorie",
-                                   color_discrete_sequence=palette_comp)
                 elif graph_type_comp == "Nuage de points":
                     fig2 = px.scatter(df_melted, x="Province", y="Valeur", color="Catégorie", size="Valeur",
                                       color_discrete_sequence=palette_comp)
@@ -5110,6 +4803,8 @@ elif st.session_state.page == "Enseignement":
 
         df_2017 = pd.DataFrame(data_2017)
         df_2018 = pd.DataFrame(data_2018)
+        df_2017_tableau, df_2018_tableau = df_2017, df_2018  # tableaux affichés, avec la ligne régionale
+        df_2017, df_2018 = sans_agregats(df_2017, "Province"), sans_agregats(df_2018, "Province")  # données tracées
 
         # Fusion des deux années
         df_all = pd.merge(df_2017, df_2018, left_on="Province", right_on="Province", suffixes=("_2017", "_2018"))
@@ -5127,7 +4822,7 @@ elif st.session_state.page == "Enseignement":
                                        default=[c for c in df_2017.columns[1:] if c != "Total"],  # niveaux, sans le total
                                        key="multi_cols3")
             graph_type_viz = st.selectbox("Type de graphique",
-                                          ["Barre", "Ligne", "Aire", "Radar", "Nuage de points", "Box"], index=0,
+                                          ["Barre", "Radar", "Nuage de points", "Box"], index=0,
                                           key="graph_viz3")
 
         with col2:
@@ -5144,12 +4839,6 @@ elif st.session_state.page == "Enseignement":
                 if graph_type_viz == "Barre":
                     fig = px.bar(df_melted, x="Province", y="Effectifs", color="Classe", barmode="group",
                                  color_discrete_sequence=palette_viz)
-                elif graph_type_viz == "Ligne":
-                    fig = px.line(df_melted, x="Province", y="Effectifs", color="Classe", markers=True,
-                                  color_discrete_sequence=palette_viz)
-                elif graph_type_viz == "Aire":
-                    fig = px.area(df_melted, x="Province", y="Effectifs", color="Classe",
-                                  color_discrete_sequence=palette_viz)
                 elif graph_type_viz == "Radar":
                     fig = px.line_polar(df_melted, r="Effectifs", theta="Classe", color="Province", line_close=True,
                                         color_discrete_sequence=palette_viz)
@@ -5165,7 +4854,7 @@ elif st.session_state.page == "Enseignement":
                 st.info("Veuillez sélectionner au moins une classe.")
 
         with col3:
-            st.dataframe(df_plot)
+            st.dataframe(df_2017_tableau if year == "2017" else df_2018_tableau)
 
         # --- Comparaison ---
 
@@ -5188,9 +4877,9 @@ elif st.session_state.page == "Enseignement":
             st.markdown("<br><br><br>", unsafe_allow_html=True)
 
             compare_cols = st.multiselect("Colonnes à comparer:", options=df_2017.columns[1:],
-                                          default=list(df_2017.columns[1:]), key="compare_cols3")
+                                          default=[c for c in df_2017.columns[1:] if c != "Total"], key="compare_cols3")
             graph_type_comp = st.selectbox("Type de graphique comparatif",
-                                           ["Barre", "Ligne", "Aire", "Radar", "Nuage de points", "Box"], index=5,
+                                           ["Barre", "Radar", "Nuage de points", "Box"], index=0,
                                            key="graph_comp3")
         with col3c:
             if compare_cols:
@@ -5207,12 +4896,6 @@ elif st.session_state.page == "Enseignement":
                 if graph_type_comp == "Barre":
                     fig2 = px.bar(df_melted_comp, x="Province", y="Effectifs", color="Classe_Annee",
                                   barmode="group", color_discrete_sequence=palette_comp)
-                elif graph_type_comp == "Ligne":
-                    fig2 = px.line(df_melted_comp, x="Province", y="Effectifs", color="Classe_Annee",
-                                   markers=True, color_discrete_sequence=palette_comp)
-                elif graph_type_comp == "Aire":
-                    fig2 = px.area(df_melted_comp, x="Province", y="Effectifs", color="Classe_Annee",
-                                   color_discrete_sequence=palette_comp)
                 elif graph_type_comp == "Radar":
                     # Pour éviter trop de séries, on peut limiter aux 2 premières colonnes
                     sample_df = df_melted_comp[df_melted_comp['Classe_Annee'].isin(cols_compare[:2])]
@@ -5767,25 +5450,31 @@ elif st.session_state.page == "pauvrete":
         gdf_communes = load_shapefile(shapefile_path)
 
         if gdf_communes is not None:
-            df_stats['join_key'] = df_stats['Commune'].apply(nettoyer_nom)
-            gdf_communes['join_key'] = gdf_communes['ADM3_FR'].apply(nettoyer_nom)
-
-            commune_name_mapping = {
-                "aqsri": "aqesri"
+            # Jointure sur la province ET la commune, dans la seule région Souss-Massa (ADM1 MA009) :
+            # un nom de commune seul n'est pas unique au Maroc (Tabia existe aussi dans la province
+            # d'Azilal, Oulad Aissa à Khouribga et à El Jadida).
+            province_vers_adm2 = {
+                "Chtouka- Ait Baha": "Chtouka- Ait Baha", "Tiznit": "Tiznit", "Tata": "Tata",
+                "Taroudannt": "Taroudannt", "Agadir-Ida -Ou-Tanane": "Agadir Ida Ou Tanane",
+                "Inezgane-Ait Melloul": "Inezgane Ait Melloul",
             }
-            df_stats['join_key'] = df_stats['join_key'].replace(commune_name_mapping)
-            gdf_merged = gdf_communes.merge(df_stats, on='join_key', how='inner')
-
+            df_stats['ADM2_FR'] = df_stats['Province'].map(province_vers_adm2)
+            commune_name_mapping = {"aqsri": "aqesri"}  # orthographe des données -> orthographe du shapefile
+            df_stats['join_key'] = df_stats['Commune'].apply(nettoyer_nom).replace(commune_name_mapping)
+            gdf_communes = gdf_communes[gdf_communes['ADM1_PCODE'] == 'MA009'].copy()
+            gdf_communes['join_key'] = gdf_communes['ADM3_FR'].apply(nettoyer_nom)
+            gdf_merged = gdf_communes.merge(df_stats, on=['ADM2_FR', 'join_key'], how='inner',
+                                            validate='one_to_one')
+            sans_polygone = df_stats.loc[~df_stats.set_index(['ADM2_FR', 'join_key']).index.isin(
+                gdf_merged.set_index(['ADM2_FR', 'join_key']).index), 'Commune'].tolist()
             # --- BANNIÈRE KPI ---
             if not gdf_merged.empty:
-                valeurs = gdf_merged[indicateur_choisi]
+                valeurs = df_stats[indicateur_choisi]
                 min_val = valeurs.min()
                 max_val = valeurs.max()
                 moy_val = valeurs.mean()
-
-                min_commune = gdf_merged.loc[valeurs.idxmin()]
-                max_commune = gdf_merged.loc[valeurs.idxmax()]
-
+                min_commune = df_stats.loc[valeurs.idxmin()]
+                max_commune = df_stats.loc[valeurs.idxmax()]
                 st.markdown(f"""
                 <div class="kpi-banner">
                     <div class="kpi-box">
@@ -5818,7 +5507,7 @@ elif st.session_state.page == "pauvrete":
                         color=indicateur_choisi,
                         hover_name="Commune",
                         hover_data={"Province": True, indicateur_choisi: ':.2f'},
-                        mapbox_style="open-street-map",  # <-- MODIFIÉ ICI pour une carte plus détaillée
+                        mapbox_style="open-street-map",
                         center={"lat": 30.2, "lon": -9.0},
                         zoom=6.5,
                         opacity=0.75,  # Un peu plus transparent pour mieux voir la carte en dessous
@@ -5828,7 +5517,7 @@ elif st.session_state.page == "pauvrete":
                     st.plotly_chart(fig_map, width="stretch")
 
                 with col2:
-                    df_sorted = gdf_merged.sort_values(by=indicateur_choisi, ascending=False)
+                    df_sorted = df_stats.sort_values(by=indicateur_choisi, ascending=False)
                     fig_bar = px.bar(
                         df_sorted.head(25),
                         x=indicateur_choisi,
@@ -5848,14 +5537,16 @@ elif st.session_state.page == "pauvrete":
                     )
                     fig_bar.update_traces(texttemplate='%{x:.1f}%', textposition='outside')
                     st.plotly_chart(fig_bar, width="stretch")
-
+                    st.caption("Les 25 communes au taux le plus élevé.")
+                st.caption(f"{len(df_stats)} communes dans les données, {len(gdf_merged)} placées sur la carte "
+                           "(jointure par province et par commune, région Souss-Massa uniquement)."
+                           + (f" Sans polygone : {', '.join(sans_polygone)}." if sans_polygone else ""))
             else:
                 st.warning(
                     "Aucune donnée géographique n'a pu être fusionnée avec les statistiques. Vérifiez les noms des communes.")
 
         else:
             st.warning("Impossible de charger le shapefile. Vérifiez le chemin et réessayez.")
-################ taaaaaaaabbbb 3
 
 
 elif st.session_state.page == "Generateur Rapport & statistiques":
@@ -6587,22 +6278,16 @@ elif st.session_state.page == "assistant axiora data":
         # Passer en mode large (full width)
         st.set_page_config(layout="wide")
 
-        # ====== FONCTION : RÉPONSE IA ======
+        # ====== État de la conversation ======
         if "messages" not in st.session_state:
             st.session_state.messages = []
-        if "pinned" not in st.session_state:
-            st.session_state.pinned = []
-        if "open_menu" not in st.session_state:
-            st.session_state.open_menu = None
-
-
         def donnees_pour_assistant():
             """Données envoyées à l'assistant : les tables de hcpdata.py (toutes passent validate_data.py)
             et, pour chacune, la publication HCP dont elle provient, afin que l'assistant puisse citer
             l'année et la source de chaque chiffre."""
             return {"sources": SOURCES, "donnees": hcp_data}
 
-        # ====== Fonction : Réponse IA ======
+        # ====== Réponse de l'assistant ======
         def response_to_query(query: str) -> str:
             hcp_definition = "Le HCP (Haut-Commissariat au Plan) est l'institution nationale chargée de la production, de l'analyse et de la diffusion des statistiques officielles au Maroc. Il joue un rôle crucial dans la planification économique et sociale en fournissant des données fiables sur des sujets tels que la population, l'emploi, l'économie, et le niveau de vie."
 
@@ -6614,7 +6299,7 @@ elif st.session_state.page == "assistant axiora data":
                     "{hcp_definition}"
 
                     Si la question porte sur des données chiffrées, réponds UNIQUEMENT à partir des données suivantes. Les valeurs sont des effectifs bruts, sauf les colonnes de taux (en %) et celles dont le nom indique une autre unité (milliers, millions de DH, Ha). Les valeurs null sont des données non publiées. Si la donnée demandée n'y figure pas, dis-le au lieu de l'estimer.
-                    Pour chaque chiffre cité, précise l'année et la publication indiquées dans "sources" pour la table utilisée. Les lignes "Total", "Ensemble" ou "Région" sont des agrégats : ne les compte pas comme une province ou une commune dans un classement.
+                    Pour chaque chiffre cité, précise l'année et la publication indiquées dans "sources" pour la table utilisée. Les lignes "Total", "Ensemble", "Région", "Souss-Massa", "Maroc", ainsi que les lignes "Province de ... Urbain", "Province de ... Rural" et "Préfecture de ... Ensemble" des tables de pauvreté, sont des agrégats : ne les compte jamais comme une province ou une commune dans un classement, une moyenne ou une somme. Les centres "(AC)" font partie de la commune du même nom : ne les compte pas comme des communes distinctes. Pour comparer des provinces sur un taux de pauvreté, utilise leur ligne "Ensemble" (taux pondéré par la population), pas la moyenne des communes.
                     Données HCP :
                     {data_json}
 
@@ -6636,61 +6321,6 @@ elif st.session_state.page == "assistant axiora data":
         # ====== CSS ======
         st.markdown("""
             <style>
-            .user-msg {
-                text-align: right;
-                background-color: #919b9c;
-                padding: 10px 15px;
-                border-radius: 12px;
-                max-width: 70%;
-                margin: 5px 0 5px auto;
-            }
-            .assistant-msg {
-                text-align: left;
-                background-color: #E5E7EB;
-                padding: 10px 15px;
-                border-radius: 12px;
-                max-width: 70%;
-                margin: 5px 0;
-            }
-            .sidebar {
-                border-left: 1px solid #E5E7EB;
-                padding-left: 15px;
-                height: 100vh;
-            }
-            .sidebar-item {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                padding: 6px 0;
-                font-size: 14px;
-            }
-            .sidebar-item:hover {
-                background-color: #F9FAFB;
-                border-radius: 6px;
-            }
-            .dots-btn {
-                background: none;
-                border: none;
-                font-size: 16px;
-                cursor: pointer;
-            }
-            .menu-box {
-                background-color: #FFF;
-                border: 1px solid #E5E7EB;
-                border-radius: 6px;
-                padding: 5px;
-                font-size: 13px;
-                position: relative;
-                z-index: 10;
-            }
-            .menu-item {
-                padding: 4px 6px;
-                cursor: pointer;
-            }
-            .menu-item:hover {
-                background-color: #F3F4F6;
-                border-radius: 4px;
-            }
             </style>
             """, unsafe_allow_html=True)
 
@@ -6711,9 +6341,12 @@ elif st.session_state.page == "assistant axiora data":
                     </div>
                     """, unsafe_allow_html=True)
         else:
-            for i, m in enumerate(st.session_state.messages):
-                role_class = "user-msg" if m["role"] == "user" else "assistant-msg"
-                st.markdown(f"<div class='{role_class}'>{m['content']}</div>", unsafe_allow_html=True)
+            for m in st.session_state.messages:
+                with st.chat_message(m["role"]):
+                    if m["role"] == "user":
+                        st.text(m["content"])
+                    else:
+                        st.markdown(m["content"])  # Markdown sans HTML brut
 
         with st.container():
             user_query = st.chat_input("Posez votre question sur les données HCP :")
@@ -6901,9 +6534,7 @@ elif st.session_state.page == "Aide & contact":
         """, unsafe_allow_html=True)
 
         # --- HEADER ---
-        st.markdown('<div class="bulle-arrondie">', unsafe_allow_html=True)
         st.header("Aide & Contact")
-        st.markdown('</div>', unsafe_allow_html=True)
         st.write("---")
 
         # --- SECTIONS DE CONTENU EN COLONNES ---
@@ -6912,9 +6543,9 @@ elif st.session_state.page == "Aide & contact":
         with col1:
             st.markdown("""
             <div class="bulle-arrondie">
-                <h3>Notre Mission</h3>
+                <h3>Le projet</h3>
                 <p>
-                Notre mission chez <strong>Axioradata</strong> est de rendre les données socio-économiques du Maroc accessibles et compréhensibles. Nous transformons les informations complexes du <strong>(HCP)</strong> en visualisations claires pour aider les décideurs et chercheurs  à explorer les dynamiques de notre pays.
+                <strong>Axiora Data</strong> est un projet personnel : il rend consultables, sous forme de cartes et de graphiques, des tableaux publiés par le <strong>Haut-Commissariat au Plan (HCP)</strong> pour la région Souss-Massa.
                 </p>
             </div>
             """, unsafe_allow_html=True)
@@ -6925,8 +6556,8 @@ elif st.session_state.page == "Aide & contact":
                 <h3>Comment Utiliser Nos Dashboards</h3>
                 <p>
                 1. <strong>Choisissez un secteur</strong> dans le menu principal.<br>
-                2. <strong>Utilisez les filtres</strong> (année, région, indicateur) pour affiner votre recherche.<br>
-                3. <strong>Interagissez avec la carte</strong> en survolant les provinces pour obtenir des détails instantanés.<br>
+                2. <strong>Utilisez les filtres</strong> (année, indicateur, milieu, province) au-dessus ou à côté de chaque graphique.<br>
+                3. <strong>Survolez la carte</strong> pour lire la valeur d’une province ou d’une commune.<br>
                 </p>
             </div>
             """, unsafe_allow_html=True)
@@ -6934,28 +6565,15 @@ elif st.session_state.page == "Aide & contact":
         st.write("---")
 
         # --- SECTION CONTACT ---
-        st.markdown('<div class="bulle-arrondie">', unsafe_allow_html=True)
-        st.subheader("Contactez-nous")
-        with st.form("contact_form", clear_on_submit=True):
-            st.write(
-                "<b>Une question ? Une suggestion ?</b><br>Remplissez le formulaire ci-dessous et nous vous répondrons dans les plus brefs délais.",
-                unsafe_allow_html=True)
-
-            name = st.text_input("Votre Nom", placeholder="Jean Dupont")
-            email = st.text_input("Votre Email", placeholder="jean.dupont@email.com")
-            subject = st.text_input("Sujet")
-            message = st.text_area("Votre Message", height=120)
-
-            submitted = st.form_submit_button("Envoyer le Message")
-
-            if submitted:
-                st.success("Merci ! Votre message a bien été envoyé.")
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.subheader("Contact")
+        st.markdown(
+            "Une erreur dans un chiffre, une question sur une source ? Ouvrez un ticket sur le dépôt du projet : "
+            "[github.com/mounjimallak-bit/Axiora-data-app/issues](https://github.com/mounjimallak-bit/Axiora-data-app/issues).")
 
         # --- PIED DE PAGE ---
         st.markdown("""
         <div class="footer">
-            <p>&copy; 2025 Axioradata. Tous droits réservés.</p>
+            <p>Axiora Data · projet personnel</p>
             <p>Données fournies par le <strong>Haut-Commissariat au Plan (HCP)</strong> du Maroc.</p>
         </div>
         """, unsafe_allow_html=True)
@@ -7052,13 +6670,13 @@ else:
                     line-height: 1.6;   
                     text-align: justify;
                 ">
-                Boostez vos analyses avec la plateforme #1
+                Les statistiques officielles de la région Souss-Massa, en cartes et en graphiques
                 </div>
                 """, unsafe_allow_html=True)
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            st.markdown('<div class="title-pill">Expert en données socio-économiques</div>', unsafe_allow_html=True)
+            st.markdown('<div class="title-pill">Données du HCP</div>', unsafe_allow_html=True)
 
             st.markdown("<br>", unsafe_allow_html=True)
 
@@ -7074,53 +6692,53 @@ else:
                 line-height: 1.6;   
                 text-align: justify;
             ">
-            Axiora Data est une plateforme avancée d’analyse et de visualisation de données socio-économiques, spécialisée dans l’exploitation des statistiques officielles fournies par le Haut-Commissariat au Plan (HCP).<br><br> 
-            Elle permet de collecter, traiter et interpréter les données relatives à divers indicateurs nationaux et régionaux tels que la pauvreté, le chômage, l’emploi, le niveau de vie, les prix ou la démographie.<br><br> 
-            Grâce à des cartes interactives et des graphiques dynamiques, Axiora Data transforme les données brutes en informations claires, visuelles et exploitables, offrant aux utilisateurs une compréhension approfondie des tendances socio-économiques du Maroc.
+            Axiora Data rassemble des tableaux publiés par la direction régionale du Haut-Commissariat au Plan (HCP) pour la région Souss-Massa : annuaires statistiques régionaux 2017 et 2018, recensements (RGPH) 2004 et 2014, enquête nationale sur l’emploi et carte communale de la pauvreté 2014.<br><br>
+            Les tableaux ont été saisis à la main, avec leur source, puis contrôlés par un script (<b>validate_data.py</b>) : totaux urbain + rural, somme des provinces contre la ligne régionale, correspondance de chaque nom avec un polygone des cartes.<br><br>
+            Chaque thème se lit par province (ou par commune pour la pauvreté), sur une carte et dans des graphiques dont les lignes d’agrégat (total régional, ensemble) sont exclues pour ne pas être comparées aux territoires qu’elles additionnent.
             </div>
             """, unsafe_allow_html=True)
 
         with col_image:
-            st.image(hcp_image, caption="Illustration d'information", width="stretch")
+            st.image(hcp_image, width="stretch")
 
         st.markdown("<br><br>", unsafe_allow_html=True)
 
-        ######### les 4 indice #######
+        ######### chiffres sur les données présentées #######
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
             st.markdown('''
             <div class="card">
-                <p style="font-size:20px;">3 020 431+</p>  <!-- réduit de 24px à 20px -->
-                <h3 style="font-size:12px;">Utilisateurs</h3>  <!-- réduit de 14px à 12px -->
-                <div class="arrow-up" style="font-size:12px;">&#9650; 5% ce mois</div>
+                <p style="font-size:20px;">6</p>
+                <h3 style="font-size:12px;">Provinces et préfectures</h3>
+                <div style="font-size:11px; color:#cbd5e1;">Agadir Ida-Outanane, Inezgane, Chtouka, Taroudant, Tiznit, Tata</div>
             </div>
             ''', unsafe_allow_html=True)
 
         with col2:
             st.markdown('''
             <div class="card">
-                <p style="font-size:20px;">350+</p>
-                <h3 style="font-size:12px;">Données</h3>
-                <div class="arrow-stable" style="font-size:12px;">&#9650;&#9660; stable</div>
+                <p style="font-size:20px;">175</p>
+                <h3 style="font-size:12px;">Communes</h3>
+                <div style="font-size:11px; color:#cbd5e1;">carte de la pauvreté 2014</div>
             </div>
             ''', unsafe_allow_html=True)
 
         with col3:
             st.markdown('''
-            <div class="card region">
-                <p style="font-size:20px;">12</p>
-                <h3 style="font-size:12px;">Régions</h3>
-                <div class="arrow-down" style="font-size:12px;">&#9660; 1 depuis 2024</div>
+            <div class="card">
+                <p style="font-size:20px;">6</p>
+                <h3 style="font-size:12px;">Thèmes</h3>
+                <div style="font-size:11px; color:#cbd5e1;">population, travail, habitat, finance, enseignement, pauvreté</div>
             </div>
             ''', unsafe_allow_html=True)
 
         with col4:
             st.markdown('''
             <div class="card">
-                <p style="font-size:20px;">6+</p>
-                <h3 style="font-size:12px;">Indicateurs</h3>
-                <div class="arrow-up" style="font-size:12px;">&#9650; 2 nouveaux</div>
+                <p style="font-size:20px;">2004–2020</p>
+                <h3 style="font-size:12px;">Période couverte</h3>
+                <div style="font-size:11px; color:#cbd5e1;">selon les tableaux publiés</div>
             </div>
             ''', unsafe_allow_html=True)
 
@@ -7196,28 +6814,28 @@ else:
 
         st.markdown("""
         <div class="hcp-band">
-            <div class="hcp-title">Workflow de traitement des données HCP</div>
-            <div class="hcp-subtitle">Étapes de traitement des données HCP garantissant qualité et conformité.</div>
+            <div class="hcp-title">Du tableau publié au graphique</div>
+            <div class="hcp-subtitle">Les quatre étapes suivies pour chaque tableau.</div>
             <div class="steps-container">
                 <div class="step-item">
                     <div class="step-number">1</div>
-                    <div class="step-title">Collecte des données</div>
-                    <div class="step-desc">Rassembler les données brutes HCP provenant de toutes les sources : enquêtes, logs et bases externes.</div>
+                    <div class="step-title">Saisie</div>
+                    <div class="step-desc">Chaque tableau publié par le HCP est saisi à la main dans le code, avec la publication et l’année dont il provient.</div>
                 </div>
                 <div class="step-item">
                     <div class="step-number">2</div>
-                    <div class="step-title">Nettoyage des données</div>
-                    <div class="step-desc">Supprimer les doublons, gérer les valeurs manquantes et standardiser les formats pour plus de cohérence.</div>
+                    <div class="step-title">Contrôle</div>
+                    <div class="step-desc">Un script vérifie les longueurs de colonnes, les totaux (urbain + rural, provinces contre région) et la correspondance avec les cartes.</div>
                 </div>
                 <div class="step-item">
                     <div class="step-number">3</div>
-                    <div class="step-title">Analyse des données</div>
-                    <div class="step-desc">Appliquer des méthodes statistiques et analytiques pour extraire des insights et tendances.</div>
+                    <div class="step-title">Exploration</div>
+                    <div class="step-desc">Cartes et graphiques par province ou par commune, filtrés par thème, indicateur et année.</div>
                 </div>
                 <div class="step-item">
                     <div class="step-number">4</div>
-                    <div class="step-title">Rapports & visualisation</div>
-                    <div class="step-desc">Générer des rapports et tableaux de bord pour la prise de décision et le suivi de conformité.</div>
+                    <div class="step-title">Rapport</div>
+                    <div class="step-desc">Un générateur produit un rapport PDF descriptif à partir d’un fichier importé par l’utilisateur.</div>
                 </div>
             </div>
         </div>
@@ -7243,7 +6861,7 @@ else:
                 line-height: 1.2;
                 text-align: center;
             ">
-                nos services
+                les thèmes
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -7252,10 +6870,10 @@ else:
         st.markdown("""
         <div style="text-align:center; margin:20px 0;">
             <div style="color:#1E293B; font-size:20px; font-weight:800; font-family:'Playfair Display', serif; margin-bottom:8px;">
-               Solutions complètes de données socio-économiques
+               Six thèmes, une région
             </div>
             <div style="color:#1E293B; font-size:14px; font-weight:500; font-family:'Roboto', sans-serif; max-width:700px; margin:0 auto; line-height:1.4;">
-                Des services statistiques stratégiques, fiables et intégrés, conçus pour fournir des insights clairs sur les réalités sociales et économiques du Maroc
+                Chaque thème reprend les tableaux publiés par le HCP pour la région Souss-Massa ; rien n’est estimé ni projeté.
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -7265,23 +6883,17 @@ else:
         # --- Données indices HCP ---
         indices = [
             ("Population",
-             "Population totale et démographie : répartition par âge, sexe, densité, taux de croissance et migrations internes et internationales."),
-            ("Santé",
-             "Santé : taux de mortalité, espérance de vie, couverture médicale, accès aux hôpitaux et suivi des maladies chroniques et épidémiques."),
-            ("Tourisme",
-             "Tourisme : flux touristique national et international, fréquentation par région, revenus générés, et impact sur l’économie locale."),
-            ("Enseignement",
-             "Enseignement : taux de scolarisation, accès à l’éducation primaire, secondaire et universitaire, alphabétisation, et qualité des infrastructures."),
-            ("Habitat",
-             "Habitat : types de logement, conditions de vie, accès à l’eau, à l’électricité et à l’assainissement, urbanisation et logement social."),
-            ("Finance",
-             "Finance : revenus moyens, répartition des richesses, épargne, accès au crédit, investissements et indicateurs économiques régionaux."),
-            ("Pauvreté",
-             "Pauvreté : pourcentage de ménages vivant sous le seuil de pauvreté, disparités régionales, et suivi des programmes d’aide sociale."),
-            ("Prix",
-             "Prix : évolution des prix des biens et services, inflation, comparaison régionale, et impact sur le pouvoir d’achat des ménages."),
+             "Division administrative (2017, 2018), population légale des RGPH 2004 et 2014, estimations 2016–2018 par milieu, groupes d’âges, nombre de ménages (2014, 2018)."),
             ("Marché du travail",
-             "Marché du travail : taux d’emploi, chômage, répartition sectorielle, salaires moyens, et insertion des jeunes et des diplômés.")
+             "Taux d’activité, d’emploi et de chômage par âge, sexe, diplôme et milieu ; population active occupée par branche et par statut (2016–2020)."),
+            ("Habitat",
+             "Opérations d’habitat achevées, en lancement, en exécution et en étude, par province : nombre, superficie, unités et coût."),
+            ("Finance",
+             "Dépôts et crédits bancaires par province, projets d’investissement 2017, créations d’entreprises et PIB régional par secteur."),
+            ("Enseignement",
+             "Nouveaux inscrits en première année, personnel enseignant et élèves du primaire public, par sexe et par province (2017, 2018)."),
+            ("Pauvreté",
+             "Taux de pauvreté et de vulnérabilité 2014 des 175 communes, sur carte et en classement."),
         ]
 
         # --- CSS pour les cartes plus petites ---
@@ -7357,20 +6969,24 @@ else:
             # --- Données FAQ ---
             faq_data = [
                 {
-                    "question": "Qu'est-ce qu'Axiora Data ?",
-                    "answer": "Axiora est une plateforme qui permet d'analyser et de traiter les données HCP et de les visualiser à l'aide de graphiques et cartes interactives."
+                    "question": "D'où viennent les données ?",
+                    "answer": "Des publications de la direction régionale du HCP Souss-Massa : annuaires statistiques régionaux 2017 et 2018, résultats des RGPH 2004 et 2014, enquête nationale sur l'emploi et carte communale de la pauvreté 2014. Les tableaux ont été saisis à la main ; le fichier hcpdata.py indique la source de chacun."
                 },
                 {
-                    "question": "Comment Axiora aide-t-il à traiter les données HCP ?",
-                    "answer": "Axiora permet de nettoyer, organiser et analyser les données HCP, générer des insights et créer des visualisations claires pour la prise de décision."
+                    "question": "Comment les chiffres sont-ils vérifiés ?",
+                    "answer": "Le script validate_data.py contrôle chaque tableau : colonnes de même longueur, urbain + rural égal au total, somme des provinces égale à la ligne régionale, et correspondance de chaque nom de province ou de commune avec un polygone de la bonne province sur les cartes. Une erreur de saisie qui respecte tous ces totaux ne serait pas détectée."
                 },
                 {
-                    "question": "Puis-je créer des graphiques personnalisés avec Axiora ?",
-                    "answer": "Oui, Axiora offre des options pour créer des graphiques personnalisés afin de mieux représenter vos données et tendances HCP."
+                    "question": "Pourquoi le total régional n'apparaît-il pas dans les graphiques ?",
+                    "answer": "Une ligne « Total », « Ensemble » ou « Région » additionne les provinces : tracée à côté d'elles, elle écraserait l'échelle et se lirait comme une province de plus. Elle reste visible dans les tableaux affichés à côté des graphiques."
                 },
                 {
-                    "question": "Axiora garantit-il la sécurité des données HCP ?",
-                    "answer": "Oui, la plateforme respecte les normes de sécurité et confidentialité pour protéger toutes les données HCP traitées."
+                    "question": "Que fait le générateur de rapport ?",
+                    "answer": "Il lit un fichier Excel (.xlsx) importé, calcule des statistiques descriptives, des classements et des moyennes par groupe, et les met en page dans un PDF. Il ne fait pas de prévision et ne vérifie pas le contenu du fichier importé."
+                },
+                {
+                    "question": "Les données saisies dans l'application sont-elles conservées ?",
+                    "answer": "Non. Un fichier importé dans le générateur n'est utilisé que pendant la session. Les questions posées à l'assistant sont envoyées à l'API Gemini de Google pour obtenir la réponse."
                 }
             ]
 
@@ -7484,36 +7100,19 @@ else:
                 <div class="footer-container">
                     <div class="footer-column">
                         <h4>Axiora Data</h4>
-                        <p>Axiora est une plateforme qui permet d'analyser et de traiter les données HCP, et de les visualiser via des graphiques et cartes interactives.</p>
-                        <div class="social-icons">
-                            <a href="#"><img src="https://img.icons8.com/ios-filled/50/000000/facebook-new.png"/></a>
-                            <a href="#"><img src="https://img.icons8.com/ios-filled/50/000000/twitter.png"/></a>
-                            <a href="#"><img src="https://img.icons8.com/ios-filled/50/000000/instagram-new.png"/></a>
-                        </div>
+                        <p>Projet personnel de Malak Mounji (ENSA Agadir), à partir des tableaux publiés par le HCP pour la région Souss-Massa.</p>
                     </div>
                     <div class="footer-column">
-                        <h4>Informations</h4>
-                        <p><a href="#">Statistiques HCP</a></p>
-                        <p><a href="#">Applications Populaires</a></p>
-                        <p><a href="#">Revenus et Utilisateurs</a></p>
-                        <p><a href="#">Tendances Santé</a></p>
+                        <h4>Sources</h4>
+                        <p><a href="https://www.hcp.ma/region-agadir/" target="_blank">HCP, direction régionale Souss-Massa</a></p>
                     </div>
                     <div class="footer-column">
-                        <h4>Outils Populaires</h4>
-                        <p><a href="#">Générateur de Noms</a></p>
-                        <p><a href="#">Analyse de Données HCP</a></p>
-                        <p><a href="#">Visualisation de Données</a></p>
-                    </div>
-                    <div class="footer-column">
-                        <h4>Contactez-nous</h4>
-                        <p><a href="#">À propos</a></p>
-                        <p><a href="#">Politique de Confidentialité</a></p>
-                        <p>Besoin d'aide ou une question ?</p>
-                        <p>Téléphone : +212 600000000</p>
-                        <p>Email : contact@axioradata.com</p>
+                        <h4>Code et contact</h4>
+                        <p><a href="https://github.com/mounjimallak-bit/Axiora-data-app" target="_blank">Code source sur GitHub</a></p>
+                        <p><a href="https://github.com/mounjimallak-bit/Axiora-data-app/issues" target="_blank">Signaler une erreur</a></p>
                     </div>
                 </div>
-                <div class="footer-bottom">&copy; 2025 - Axiora Data</div>
+                <div class="footer-bottom">Données : Haut-Commissariat au Plan (HCP), Maroc</div>
             </div>
 
             """, unsafe_allow_html=True)
