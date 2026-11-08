@@ -5,7 +5,7 @@ Moroccan socio-economic indicators published by the **HCP** (Haut-Commissariat a
 Plan, Morocco's national statistics institute).
 
 The platform turns official statistical tables into interactive dashboards,
-choropleth maps, trend projections and automatically generated PDF reports.
+choropleth maps and automatically generated PDF reports.
 
 **Live application:** https://axiora-data.streamlit.app/
 
@@ -28,8 +28,7 @@ Public statistical data in Morocco is published mainly as spreadsheets, which
 makes comparison across regions and over time slow and error-prone. For Axiora Data
 I transcribed a set of these tables (Souss-Massa region) by hand into Python
 dictionaries, and the app exposes them through a single interface where an
-indicator can be explored on a map, compared between provinces and projected
-forward. There is no automated import from HCP files, so the data is only as good
+indicator can be explored on a map and compared between provinces and years. There is no automated import from HCP files, so the data is only as good
 as the transcription; `validate_data.py` exists to check it (see Data checks below).
 
 The application covers **six thematic domains**, plus two cross-cutting modules:
@@ -63,13 +62,14 @@ The application covers **six thematic domains**, plus two cross-cutting modules:
 - Comparative charts across territories and time periods
 - Filtering by year, province and indicator
 
-### Trend projection
+### Aggregate rows
 
-Linear regression (`scikit-learn`) is used to extrapolate indicator trends over
-time and produce simple forward projections. The intent is to make direction and
-magnitude of change readable, not to build a predictive model. Each line is fitted on the
-full observed series, with no held-out evaluation: the projections are descriptive
-extrapolations of short historical series.
+HCP tables mix territories with the rows that add them up ("Souss-Massa", "Région",
+"Total"). Those rows stay in the tables shown next to each chart, but each table is
+split at its source with `sans_agregats()`, which removes the labels listed in
+`LIGNES_AGREGAT` (an exact list, no pattern matching) and fails if the expected
+aggregate row is missing. A total is therefore never plotted as if it were one more
+province, and nothing is removed silently.
 
 ### Automatic PDF reporting
 
@@ -99,7 +99,6 @@ Streamlit secrets and is never stored in the repository.
 | **Data processing** | pandas, NumPy |
 | **Visualisation** | Plotly, Matplotlib |
 | **Geospatial** | GeoPandas |
-| **Modelling** | scikit-learn (`LinearRegression`) |
 | **Reporting** | fpdf, Kaleido (static chart export) |
 | **LLM** | Google Generative AI (Gemini) |
 
@@ -174,8 +173,11 @@ python validate_data.py
 The script parses the tables in `hcpdata.py` and `app.py` without running the app
 and checks that every column of a table has the same length, that totals match
 their parts (Urbain + Rural, Hommes + Femmes, regional row vs provinces), that no
-rate is a missing value typed as 0, and that every province and commune name
-reaches a polygon in the shapefiles. It exits with code 1 while errors remain;
+rate is a missing value typed as 0, and that every province name reaches a polygon.
+For the commune poverty map it reproduces the app's join exactly (province and
+commune together, Souss-Massa only) and requires every data row to reach exactly one
+polygon of its own province: a commune name alone is not unique in Morocco (Tabia
+and Oulad Aissa also exist in other regions). It exits with code 1 while errors remain;
 on the current data it reports no errors across 93 tables.
 
 ## Poverty analysis (case study)
@@ -184,9 +186,12 @@ on the current data it reports no errors across 93 tables.
 python analyse_pauvrete.py --figures
 ```
 
-Reproduces every number of the poverty analysis in the portfolio case study
-(distributions, sign test, Wilcoxon test, bootstrap interval, results by territory)
-from `hcpdata.py`, and writes the two box plots to `figures/`.
+Reproduces every number of the poverty analysis in the portfolio case study from
+`hcpdata.py`: distributions of commune rates, changes by commune, results by
+territory both with each commune counted once and with the population-weighted
+rate the HCP publishes for each province ("Ensemble" row), and writes the two box
+plots to `figures/`. No hypothesis test is computed: the communes are the whole set
+with published rates, not a sample, so the results are descriptive.
 
 ## Data provenance
 
@@ -217,8 +222,6 @@ before ranking or summing, and `validate_data.py` does not inspect uploaded file
 ## Notes and Limitations
 
 - The interface language is **French**, matching the source data.
-- Projections use linear regression only; they extrapolate observed trends and
-  should not be read as forecasts accounting for structural change.
 - The 2004, 2007 and 2014 poverty rates come from three separate HCP poverty
   maps; their comparability over time has not been checked against the HCP
   methodology notes.
