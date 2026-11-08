@@ -1,22 +1,3 @@
-"""
-Data checks for Axiora.
-
-Reads the hand-typed tables in hcpdata.py and the inline tables in app.py
-(parsed as literals, nothing is executed) and reports:
-
-  1. tables whose columns do not have the same number of values
-  2. totals that do not match their parts
-       - Total column vs Urbain + Rural (and Hommes/Femmes, Masculin/Féminin, Garçons/Filles)
-       - TOTAL-x column vs the sum of the other *-x columns
-       - aggregate row (Souss-Massa, Total, Ensemble...) vs the sum of the province rows
-  3. zeros in rate columns, which usually mean "missing" rather than 0 %
-  4. province names that do not reach a shape in the ADM2 shapefile after the
-     app's own name mappings, and Souss-Massa communes with the same problem
-  5. tables defined both in hcpdata.py and inline in app.py whose values differ
-
-Usage:  python validate_data.py
-Exit code is 1 when at least one error is found, so it can run in CI.
-"""
 
 import ast
 import re
@@ -46,7 +27,6 @@ def warn(msg):
     warnings.append(msg)
 
 
-# ---------------------------------------------------------------- loading
 def literal_tables(path):
     """Return {name: dict} for every top-level or nested `x = {...}` literal in a file."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -124,7 +104,6 @@ def iter_tables(obj, path):
             yield from iter_tables(v, f"{path}/{k}")
 
 
-# ---------------------------------------------------------------- helpers
 def is_num(x):
     return isinstance(x, (int, float)) and not isinstance(x, bool)
 
@@ -163,7 +142,6 @@ def label_column(table):
     return None
 
 
-# ---------------------------------------------------------------- checks
 def check_lengths(name, table):
     lens = {c: len(v) for c, v in table.items() if isinstance(v, list)}
     if len(set(lens.values())) > 1:
@@ -265,36 +243,52 @@ def check_province_names(app_path, tables):
 
 
 def check_commune_names(app_path):
+    """Reproduce the commune map join of app.py exactly: a data row is drawn on the polygon whose
+    province (ADM2_FR, through province_vers_adm2) AND cleaned commune name both match, among the
+    communes of Souss-Massa only (ADM1_PCODE MA009). Every row must reach exactly one polygon and
+    every polygon at most one row; a commune name alone is not unique in Morocco."""
     tables = literal_tables(app_path)
     pauvrete = tables.get("pauvrete_data")
-    mapping_list = literal_dicts_named(app_path, "commune_name_mapping")
     if not pauvrete:
         return
-    mapping = mapping_list[0][1] if mapping_list else {}
+    cm = literal_dicts_named(app_path, "commune_name_mapping")
+    pv = literal_dicts_named(app_path, "province_vers_adm2")
+    mapping = cm[-1][1] if cm else {}
+    provinces = pv[-1][1] if pv else None
+    if provinces is None:
+        err("[map] province_vers_adm2 not found in app.py: the commune map cannot be checked")
+        return
 
     def clean(s):  # same as nettoyer_nom in app.py
         return s.lower().replace("(m)", "").replace("(ac)", "").replace("-", " ").replace("'", " ").strip()
 
-    shapes = {clean(r["ADM3_FR"]) for r in read_dbf(ADM3_DBF) if r["ADM2_PCODE"].startswith(SOUSS_MASSA_PCODE)}
+    rows = read_dbf(ADM3_DBF)
+    shapes = {(r["ADM2_FR"], clean(r["ADM3_FR"])): r["ADM3_PCODE"] for r in rows if r["ADM1_PCODE"] == SOUSS_MASSA_PCODE}
     keys = []
     for prov, data in pauvrete.items():
+        if prov not in provinces:
+            err(f"[map] province '{prov}' of pauvrete_data is missing from province_vers_adm2")
+            continue
         for c in data["Commune"]:
             if "Province de" in c or "Préfecture d" in c or "(AC)" in c:
                 continue  # aggregates and centres, excluded from the map in app.py
             k = clean(c)
-            keys.append((prov, c, mapping.get(k, k)))
-    missing = [(p, c) for p, c, k in keys if k not in shapes]
-    for p, c in missing:
-        warn(f"[map] commune '{c}' ({p}) does not match any commune in the shapefile and is not drawn")
+            keys.append((prov, c, (provinces[prov], mapping.get(k, k))))
+    for p, c, k in keys:
+        if k not in shapes:
+            err(f"[map] commune '{c}' ({p}) reaches no polygon of its province and is not drawn")
     from collections import Counter
-    dup = [k for k, n in Counter(k for _, _, k in keys).items() if n > 1 and k in shapes]
-    for k in dup:
-        names = [c for _, c, kk in keys if kk == k]
-        err(f"[map] several rows are drawn on the same commune polygon '{k}': {names}")
-    covered = {k for _, _, k in keys}
-    not_covered = sorted(shapes - covered)
+    for k, n in Counter(k for _, _, k in keys).items():
+        if n > 1:
+            err(f"[map] several rows are drawn on the polygon {k}: {[c for _, c, kk in keys if kk == k]}")
+    not_covered = sorted(set(shapes) - {k for _, _, k in keys})
     if not_covered:
         warn(f"[map] {len(not_covered)} Souss-Massa communes in the shapefile have no data row: {not_covered}")
+    homonyms = Counter(clean(r["ADM3_FR"]) for r in rows)
+    shared = sorted({k[1] for _, _, k in keys if homonyms[k[1]] > 1})
+    print(f"  commune map: {len(keys)} rows, {len(keys) - sum(k not in shapes for _, _, k in keys)} drawn on "
+          f"{len(set(k for _, _, k in keys) & set(shapes))} distinct polygons; "
+          f"{len(shared)} commune names also exist elsewhere in Morocco ({', '.join(shared)})")
 
 
 def check_duplicates(hcp, app_tables):
@@ -311,8 +305,6 @@ def check_duplicates(hcp, app_tables):
                     if a[prov][col] != b[prov][col]:
                         err(f"[copy] '{prov}' / '{col}' differs between hcpdata.py['{hk}'] and app.py {ak}")
 
-
-# ---------------------------------------------------------------- main
 # Tables whose "Total" column is the sum of named columns (beyond the Urbain/Rural pairs).
 COLUMN_SUMS = {
     "nombre_consommateurs_par_type_tension": ("Total", ["Basse tension", "Moyenne tension", "Haute tension"]),
