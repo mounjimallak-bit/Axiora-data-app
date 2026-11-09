@@ -102,10 +102,10 @@ hcp_data = {
         "division_administrative": {
             "2017": {
                 "Province": ["Agadir Ida Outanane", "Inezgane-Aït Melloul", "Chtouka-Aït Baha", "Taroudant", "Tiznit", "Tata"],
-                "Urbaines": [1, 2, 2, 8, 2, 4],
-                "Rurales": [11, 4, 20, 81, 23, 16],
-                "Total Communes": [12, 6, 22, 89, 25, 20],
-                "Cercles": [1, 1, 2, 5, 3, 3]
+                "Urbaines": [1, 4, 2, 8, 2, 4],
+                "Rurales": [12, 2, 20, 81, 23, 16],
+                "Total Communes": [13, 6, 22, 89, 25, 20],
+                "Cercles": [1, 1, 3, 5, 3, 3]
             },
             "2018": {
                 "Province": ["Agadir Ida Outanane", "Inezgane Ait Melloul", "Chtouka Ait Baha", "Taroudant", "Tiznit", "Tata"],
@@ -251,10 +251,10 @@ hcp_data = {
             "Nbre d'unités": [9439, 1063, 295, 261, 4279, None, 15337],
             "Superficie (En Ha)": [283, 35, 427, 1, 986, None, 1732],
             "Lotissements": [589, 100, 0, 0, 0, None, 689],
-            "Logements": [0, 0, 0, 0, 0, None, 0],
+            "Logements (recasement)": [0, 0, 0, 0, 0, None, 0],
             "Restructuration": [7063, 0, 295, 0, 4213, None, 11571],
             "Lots de terrain": [21, 737, 0, 0, 0, None, 758],
-            "Logements_2": [1693, 216, 0, 261, 62, None, 2232],
+            "Logements (autres unités)": [1693, 216, 0, 261, 62, None, 2232],
             "Activités et Zones Industrielles": [73, 10, 0, 0, 4, None, 87],
             "Cout en Millions de DH": [588, 285, 2, 36, 60, None, 971]
         },
@@ -263,10 +263,10 @@ hcp_data = {
             "Nbre d'unités": [9817, 583, 2469, 12869],
             "Superficie (En Ha)": [334, 2, 383, 719],
             "Lotissements": [0, 0, 0, 0],
-            "Logements": [0, 0, 0, 0],
+            "Logements (recasement)": [0, 0, 0, 0],
             "Restructuration": [7395, 0, 2469, 9864],
             "Lots de terrain": [0, 0, 0, 0],
-            "Logements_2": [679, 533, 0, 1212],
+            "Logements (autres unités)": [679, 533, 0, 1212],
             "Activités et Zones Industrielles": [1743, 50, 0, 1793],
             "Cout en Millions de DH": [385, 104, 25, 514]
         },
@@ -275,10 +275,10 @@ hcp_data = {
             "Nbre d'unités": [6662, 3283, 5841, 2050, 797, None],
             "Superficie (En Ha)": [60, 42, 330, 143, 64, None],
             "Lotissements": [985, 744, 24, 0, 0, None],
-            "Logements": [0, 0, 210, 0, 0, None],
+            "Logements (recasement)": [0, 0, 210, 0, 0, None],
             "Restructuration": [500, 0, 150, 0, 672, None],
             "Lots de terrain": [25, 994, 4800, 850, 0, None],
-            "Logements_2": [4416, 1228, 100, 96, 111, None],
+            "Logements (autres unités)": [4416, 1228, 100, 96, 111, None],
             "Activités et Zones Industrielles": [736, 317, 557, 1104, 14, None],
             "Cout en Millions de DH": [2121, 517, 973, 475, 38, None]
         },
@@ -287,10 +287,10 @@ hcp_data = {
             "Nbre d'unités": [29568, 722, 457, 400, 300, None, 31447],
             "Superficie (En Ha)": [1019, 3, 4, 6, 1, None, 1033],
             "Lotissements": [0, 0, 0, 0, 0, None, 0],
-            "Logements": [0, 0, 0, 400, 0, None, 400],
+            "Logements (recasement)": [0, 0, 0, 400, 0, None, 400],
             "Restructuration": [0, 0, 0, 0, 0, None, 0],
             "Lots de terrain": [25204, 0, 117, 0, 0, None, 25321],
-            "Logements_2": [4364, 500, 340, 0, 300, None, 5504],
+            "Logements (autres unités)": [4364, 500, 340, 0, 300, None, 5504],
             "Activités et Zones Industrielles": [0, 222, 0, 0, 0, None, 222],
             "Cout en Millions de DH": [5815, 110, 77, 40, 55, None, 6097]
         }
@@ -314,9 +314,9 @@ hcp_data = {
         },
         "evolution_entreprises_creees": {
             "Année": ["2017", "2016", "2015"],
-            "Nombre d’emplois ": [3549, 2718, 1087],
-            "Montant d’investissement (Mdhs) ": [360, 323, 4293],
-            "Nombre de projets ": [684, 572, 562]
+            "Nombre d’emplois ": [3549, 2718, 4293],
+            "Montant d’investissement (Mdhs) ": [360, 323, 562],
+            "Nombre de projets ": [684, 572, 1087]
         },
         "repartition_entreprises_secteur": {
             "Secteur d’Activité": ["Tourisme", "Services", "Commerce", "BTP", "Mines", "Agriculture et pêche", "Industrie"],
