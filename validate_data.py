@@ -38,20 +38,18 @@ PAIRS = [("Urbain", "Rural"), ("Hommes", "Femmes"), ("Masculin", "Féminin"), ("
 # (amounts rounded to one or two decimals) get a rounding margin.
 DECIMAL_TOLERANCE = 0.05  # absolute, for values published with decimals
 
-# Discrepancies that are in the data as transcribed and whose source has not been settled. They are
-# reported as warnings, by name, instead of being hidden by a tolerance; each one must be checked
-# against the publication. Every column of these tables adds up correctly; only the rows below do not,
-# which points to the published table rather than to a typing error (a single mistyped value would
-# also break the sum of its column).
+# Discrepancies printed in the HCP yearbooks themselves (checked against the published tables). The
+# values are kept as published and reported as warnings, by name, instead of being hidden by a
+# tolerance.
 KNOWN_DISCREPANCIES = [
     (r"nouveaux_inscrits_annee_1/2018: Tiznit: Total|Nouveaux inscrits \(1ère année\)/2018: Tiznit: Total",
      "Tiznit 2018: Garçons + Filles = 3 828 but Total = 3 826 (and 58 641 vs 58 639 for the region); "
-     "check the 2018 regional yearbook, Enseignement, tableau 6"),
+     "as printed in the 2018 regional yearbook, Enseignement, tableau 6"),
     (r"nouveaux_inscrits_annee_1/2018: Région Souss-Massa: Total|Nouveaux inscrits \(1ère année\)/2018: Région Souss-Massa: Total",
      "same discrepancy, carried into the regional row"),
     (r"(projets_investissement_2017|data_projets): row 'Total'",
      "the Total row differs by 1 from the sum of the provinces in three columns; "
-     "check the 2017 regional yearbook, Finances"),
+     "as printed in the 2017 regional yearbook, Finances"),
 ]
 
 errors, warnings = [], []
@@ -60,7 +58,7 @@ errors, warnings = [], []
 def err(msg):
     for pattern, note in KNOWN_DISCREPANCIES:
         if re.search(pattern, msg):
-            warnings.append(f"{msg}  [known, to check in the publication: {note}]")
+            warnings.append(f"{msg}  [published discrepancy: {note}]")
             return
     errors.append(msg)
 
