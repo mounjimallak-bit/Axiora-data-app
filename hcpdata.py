@@ -38,6 +38,10 @@ SOURCES = {
 # Published figures that do not add up, and the value used here:
 #   marche_du_travail/population_chomage_age_milieu, Région, 35-44 ans: the 2016 yearbook prints
 #   12 984; its urban and rural parts (9 538 + 2 510) and the row total both give 12 048.
+#   enseignement/nouveaux_inscrits_annee_1, 2018, Tiznit: the 2018 yearbook prints Garçons 1 923,
+#   Filles 1 905 and Total 3 826 (regional total 58 639): kept as published.
+#   finance/projets_investissement_2017, Total row: the 2017 yearbook prints 12 793 jobs, 17 960 million DH
+#   and 213 projects, 1 away from the sum of the provinces: kept as published.
 #   population/population_legale, Chtouka-Aït Baha, urbain 2004: 39 694, the value with which the
 #   provinces add up to the published regional total (no HCP sheet gives this figure directly).
 
