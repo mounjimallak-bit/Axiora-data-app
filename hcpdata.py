@@ -224,13 +224,13 @@ hcp_data = {
             "Maroc-Total": [1351538, 3083382, 2665456, 3541245, 10641621]
         },
         "population_active_occupee_sexe": {
-            "Milieu": ["Région", "Urbain", "Rural", "Maroc", "Urbain", "Rural"],
+            "Milieu": ["Région", "Urbain Région", "Rural Région", "Maroc", "Urbain Maroc", "Rural Maroc"],
             "Masculin": [610608, 314710, 295898, 7884294, 4386974, 3497320],
             "Féminin": [245542, 62064, 183478, 2757327, 1041263, 1716064],
             "Total": [856150, 376774, 479376, 10641621, 5428237, 5213384]
         },
         "population_active_occupee_secteurs": {
-            "Milieu": ["Région", "Urbain", "Rural", "Maroc", "Urbain", "Rural"],
+            "Milieu": ["Région", "Urbain Région", "Rural Région", "Maroc", "Urbain Maroc", "Rural Maroc"],
             "Forêt et pêche / Agriculture": [382657, 36085, 346572, 4042943, 244731, 3798212],
             "Industrie et commerce": [70488, 52390, 18098, 1199134, 980432, 218702],
             "B.T.P": [86324, 45408, 40916, 1042110, 610666, 431444],
@@ -349,14 +349,14 @@ hcp_data = {
         "personnel_enseignant_sexe": {
             "2017": {
                 "Province": ["Agadir Ida Outanane", "Inezgane Ait Melloul", "Chtouka Ait Baha", "Taroudant", "Tiznit", "Tata", "Total"],
-                "Garçons 2017": [769, 773, 1303, 3185, 837, 509, 7376],
-                "Filles 2017": [1022, 874, 619, 2073, 385, 310, 5283],
+                "Hommes 2017": [769, 773, 1303, 3185, 837, 509, 7376],
+                "Femmes 2017": [1022, 874, 619, 2073, 385, 310, 5283],
                 "Total 2017": [1791, 1647, 1922, 5258, 1222, 819, 12659]
             },
             "2018": {
                 "Province": ["Agadir Idaoutanane", "Inezgane Ait Melloul", "Chtouka Ait Baha", "Taroudant", "Tiznit", "Tata", "Total région Souss-Massa"],
-                "Garçons 2018": [816, 830, 1334, 3048, 890, 494, 7412],
-                "Filles 2018": [1101, 942, 728, 2137, 411, 339, 5658],
+                "Hommes 2018": [816, 830, 1334, 3048, 890, 494, 7412],
+                "Femmes 2018": [1101, 942, 728, 2137, 411, 339, 5658],
                 "Total 2018": [1917, 1772, 2062, 5185, 1301, 833, 13070]
             }
         },
