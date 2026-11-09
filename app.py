@@ -6,13 +6,12 @@ import plotly.graph_objects as go
 import plotly.express as px
 import numpy as np
 import json
+import sys
 from hcpdata import hcp_data, SOURCES
 from fpdf import FPDF
 from datetime import datetime
 import os
 import geopandas as gpd
-import os
-import plotly.io as pio
 import matplotlib
 
 # Noms de province tels qu'écrits dans les tables HCP -> nom ADM2_FR du shapefile.
@@ -45,6 +44,7 @@ def sans_agregats(df, colonne):
 
 
 AUTRES_NON_AFFICHES = "Autres (non affichés)"
+ASR_SOURCE = "HCP, Annuaire statistique régional Souss-Massa"
 
 # Seule valeur des tables qui n'est pas lue dans une publication (voir le README) : elle est signalée
 # partout où elle est affichée.
@@ -357,6 +357,7 @@ if st.session_state.page == "Population":
                        1 – Division administrative de la région
         </h4>
         """, unsafe_allow_html=True)
+    st.caption(f"Sources : {ASR_SOURCE} 2017 et 2018, chapitre Population ; RGPH 2004 et 2014 (annuaire 2017, tableau 2).")
     st.markdown("<br><br>", unsafe_allow_html=True)
     # --- Création de la mise en page 3 colonnes ---
     col11, col22, col33 = st.columns([0.1, 1, 0.1])
@@ -1520,6 +1521,7 @@ elif st.session_state.page == "Marche de Travail":
                                           <h4 style=' color: #85919e;margin-left: 0px;'>
                                                        1. Activité par âge et milieu (2017–2020) </h4>
                                           """, unsafe_allow_html=True)
+        st.caption(f"Sources : sections 1 à 3, HCP, Enquête nationale sur l'emploi 2017 à 2020, résultats régionaux ; sections 4 à 10, {ASR_SOURCE} 2016, chapitre Emploi (ENE 2016).")
         data = {
             "Âge": ["15-24", "25-34", "35-44", "45 et plus", "Total"],
             "2017-Urbain": [16.4, 55.8, 56.3, 39.8, 41.8],
@@ -2148,6 +2150,8 @@ elif st.session_state.page == "Marche de Travail":
         with col3i:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.dataframe(df_chomage, width="stretch")
+            st.caption("Région, 35-44 ans : l'annuaire 2016 imprime 12 984 ; la valeur retenue, 12 048, est la somme "
+                       "de ses parts urbaine (9 538) et rurale (2 510) et celle qui donne le total de la ligne.")
 
         # ================== Deuxième ligne : Comparaison multi-indicateurs ==================
         st.markdown("""
@@ -3092,6 +3096,7 @@ elif st.session_state.page == "Habitat":
 
         # ================== TITRE ==================
         st.markdown("<h4 style='color: #85919e;'>1-Opérations achevées par province</h4>", unsafe_allow_html=True)
+        st.caption(f"Source : {ASR_SOURCE} 2017, chapitre Habitat, tableaux 1 à 4.")
 
         # ================== DONNÉES ==================
         data_ops = {
@@ -3809,6 +3814,7 @@ elif st.session_state.page == "Finance":
 
         st.markdown("<h4 style='color: #607080;'>1-Dépôts et crédits des différentes banques par province</h4>",
                     unsafe_allow_html=True)
+        st.caption(f"Source : {ASR_SOURCE} 2017, chapitres Finances et Économie.")
         # ================== INTERFACE ==================
         # Palette pastel bleu et violet
         custom_palette = ["#a3c4f3", "#c9b3f3"]
@@ -4610,6 +4616,7 @@ elif st.session_state.page == "Enseignement":
         st.markdown(
             "<h4 style='color: #85919e;'>1-Nouveaux inscrits en 1ʳᵉ année selon le sexe, le milieu et les provinces/préfectures</h4>",
             unsafe_allow_html=True)
+        st.caption(f"Sources : {ASR_SOURCE} 2017 et 2018, chapitre Enseignement, tableaux 6, 7 et 11.")
 
         col1, col2, col3 = st.columns([1, 3, 1])
 
@@ -6494,16 +6501,16 @@ elif st.session_state.page == "assistant axiora data":
             session.append(maintenant)
             return True, 0
 
-        # SDK google-genai (le SDK google-generativeai n'est plus maintenu). Importé ici seulement :
-        # un problème avec ce paquet n'empêche pas les autres pages de fonctionner.
+        # SDK google-generativeai : c'est celui dont le fonctionnement a été vérifié en production. Il est
+        # déclaré obsolète par Google ; la migration vers google-genai reste à faire, avec un test réel
+        # de l'API (voir le README). Importé ici seulement : un problème avec ce paquet n'empêche pas
+        # les autres pages de fonctionner.
         try:
-            from google import genai
-            from google.genai import types as genai_types
-            from google.genai import errors as genai_errors
+            import google.generativeai as genai
         except ImportError:
-            st.error("Le paquet google-genai n'est pas installé : l'assistant est indisponible.")
+            st.error("Le paquet google-generativeai n'est pas installé : l'assistant est indisponible.")
             st.stop()
-        client_gemini = genai.Client(api_key=gemini_key)
+        genai.configure(api_key=gemini_key)
 
         # Passer en mode large (full width)
         st.set_page_config(layout="wide")
@@ -6535,11 +6542,11 @@ elif st.session_state.page == "assistant axiora data":
                     Si la question est hors de ces deux contextes, réponds que tu ne peux répondre qu'avec les données fournies.
                     Quand une question fait suite à une précédente (« et pour Tata ? »), applique-la au sujet de l'échange précédent.
                     """
-        MODELE_GEMINI = "gemini-2.5-flash"
-        config_gemini = genai_types.GenerateContentConfig(
+        model = genai.GenerativeModel(
+            'gemini-2.5-flash',
             system_instruction=instruction_systeme,
             # Température basse : on attend des chiffres lus dans les tables, pas de la créativité.
-            temperature=0.2,
+            generation_config={"temperature": 0.2},
         )
 
         # ====== Réponse de l'assistant ======
@@ -6549,24 +6556,28 @@ elif st.session_state.page == "assistant axiora data":
             contenus = []
             echanges = [m for m in historique if not m.get("erreur")][-2 * MAX_ECHANGES_HISTORIQUE:]
             for m in echanges:
-                contenus.append({"role": "user" if m["role"] == "user" else "model",
-                                 "parts": [{"text": m["content"]}]})
-            contenus.append({"role": "user", "parts": [{"text": query}]})
+                contenus.append({"role": "user" if m["role"] == "user" else "model", "parts": [m["content"]]})
+            contenus.append({"role": "user", "parts": [query]})
             try:
-                resp = client_gemini.models.generate_content(model=MODELE_GEMINI, contents=contenus,
-                                                             config=config_gemini)
-            except genai_errors.APIError as e:
-                if e.code == 429:
+                resp = model.generate_content(contenus)
+            except Exception as e:
+                # Le type et le code de l'erreur (jamais la clé) vont dans les journaux du serveur,
+                # visibles par la propriétaire de l'application, pour qu'une panne ne soit pas muette.
+                code = getattr(e, "code", None)
+                code = code if isinstance(code, int) else None
+                print(f"[assistant] erreur {type(e).__name__} {code or ''} : {str(e)[:300]}", file=sys.stderr)
+                if code == 429 or "429" in str(e) or "quota" in str(e).lower():
                     return ("L'assistant a atteint sa limite de requêtes pour le moment. "
                             "Réessayez un peu plus tard ; les tableaux de bord restent disponibles."), True
-                return "Désolé, la réponse n'a pas pu être générée. Réessayez dans un instant.", True
-            except Exception:
-                return "Désolé, la réponse n'a pas pu être générée. Réessayez dans un instant.", True
-            if not resp.text:
-                # Réponse vide (bloquée par les filtres du modèle, par exemple) : on le dit plutôt que
-                # d'afficher une bulle vide.
+                detail = f"erreur {code}" if code else type(e).__name__
+                return f"Désolé, la réponse n'a pas pu être générée ({detail}). Réessayez dans un instant.", True
+            try:
+                texte = resp.text
+            except ValueError:
+                texte = ""  # réponse sans texte (bloquée par les filtres du modèle, par exemple)
+            if not texte:
                 return "L'assistant n'a pas fourni de réponse à cette question. Reformulez-la.", True
-            return resp.text, False
+            return texte, False
 
 
         # ====== CSS ======
@@ -6835,7 +6846,7 @@ elif st.session_state.page == "Aide & contact":
         st.markdown("""
         <div class="footer">
             <p>Axiora Data · projet personnel</p>
-            <p>Données fournies par le <strong>Haut-Commissariat au Plan (HCP)</strong> du Maroc.</p>
+            <p>Données publiées par le <strong>Haut-Commissariat au Plan (HCP)</strong> du Maroc, saisies à la main à partir de ses publications.</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -6953,9 +6964,9 @@ else:
                 line-height: 1.6;   
                 text-align: justify;
             ">
-            Axiora Data rassemble des tableaux publiés par la direction régionale du Haut-Commissariat au Plan (HCP) pour la région Souss-Massa : annuaires statistiques régionaux 2017 et 2018, recensements (RGPH) 2004 et 2014, enquête nationale sur l’emploi et carte communale de la pauvreté 2014.<br><br>
+            Axiora Data rassemble des tableaux publiés par la direction régionale du Haut-Commissariat au Plan (HCP) pour la région Souss-Massa : annuaires statistiques régionaux 2016, 2017 et 2018, recensements (RGPH) 2004 et 2014, enquête nationale sur l’emploi (2016 à 2020) et fiches d’évolution de la pauvreté par commune (2004, 2007 et 2014).<br><br>
             Les tableaux ont été saisis à la main, avec leur source, puis contrôlés par un script (validate_data.py) : totaux urbain + rural, somme des provinces contre la ligne régionale, correspondance de chaque nom avec un polygone des cartes.<br><br>
-            Chaque thème se lit par province (ou par commune pour la pauvreté), sur une carte et dans des graphiques dont les lignes d’agrégat (total régional, ensemble) sont exclues pour ne pas être comparées aux territoires qu’elles additionnent.
+            La population, l’habitat, la finance et l’enseignement se lisent par province, et la pauvreté par commune, sur une carte et dans des graphiques ; le marché du travail, publié surtout au niveau régional, se lit en graphiques. Les lignes d’agrégat (total régional, ensemble) sont exclues des graphiques pour ne pas être comparées aux territoires qu’elles additionnent.
             </div>
             """, unsafe_allow_html=True)
 
@@ -7231,7 +7242,7 @@ else:
             faq_data = [
                 {
                     "question": "D'où viennent les données ?",
-                    "answer": "Des publications de la direction régionale du HCP Souss-Massa : annuaires statistiques régionaux 2017 et 2018, résultats des RGPH 2004 et 2014, enquête nationale sur l'emploi et carte communale de la pauvreté 2014. Les tableaux ont été saisis à la main ; le fichier hcpdata.py indique la source de chacun."
+                    "answer": "Des publications de la direction régionale du HCP Souss-Massa : annuaires statistiques régionaux 2016, 2017 et 2018, résultats des RGPH 2004 et 2014, enquête nationale sur l'emploi (2016 à 2020) et fiches d'évolution de la pauvreté par commune (2004, 2007 et 2014). Les tableaux ont été saisis à la main ; le fichier hcpdata.py indique la source de chacun, et chaque page de l'application rappelle la sienne."
                 },
                 {
                     "question": "Comment les chiffres sont-ils vérifiés ?",
