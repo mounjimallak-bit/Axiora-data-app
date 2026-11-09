@@ -87,7 +87,7 @@ Built with `fpdf` and a custom `PDF` class handling headers, footers and TOC ent
 
 ### Conversational assistant
 
-A question-answering module built on `gemini-2.5-flash`. Every call sends the tables of
+A question-answering module built on `gemini-2.5-flash` through the `google-genai` SDK. Every call sends the tables of
 `hcpdata.py` and their sources as system instructions, with a low temperature (0.2), plus the
 last six exchanges so that follow-up questions keep their context. Use is limited to 6 questions
 per minute per session and 20 per minute for the whole server, and to 500 characters per question.
@@ -105,7 +105,7 @@ The API key is read from Streamlit secrets and is never stored in the repository
 | **Visualisation** | Plotly, Matplotlib |
 | **Geospatial** | GeoPandas |
 | **Reporting** | fpdf, Matplotlib (charts embedded in the PDF) |
-| **LLM** | Google Generative AI (Gemini) |
+| **LLM** | Google Gen AI SDK (`google-genai`), Gemini |
 
 ---
 
@@ -158,6 +158,12 @@ GEMINI_API_KEY = "your_api_key_here"
 
 This file is git-ignored. All other modules work without it.
 
+Last clean install tested (Python 3.13, `pip install -r requirements.txt`, November 2026):
+streamlit 1.66.1, pandas 3.1.1, numpy 2.5.4, plotly 5.24.1, geopandas 1.2.0,
+google-genai 3.0.0, fpdf 1.7.2, matplotlib 3.11.2, openpyxl 3.1.5, Pillow 13.0.0.
+`requirements.txt` pins only Streamlit and Plotly; to reproduce this environment exactly,
+install these versions.
+
 ### 3. Run
 
 ```bash
@@ -182,8 +188,34 @@ rate is a missing value typed as 0, and that every province name reaches a polyg
 For the commune poverty map it reproduces the app's join exactly (province and
 commune together, Souss-Massa only) and requires every data row to reach exactly one
 polygon of its own province: a commune name alone is not unique in Morocco (Tabia
-and Oulad Aissa also exist in other regions). It exits with code 1 while errors remain;
-on the current data it reports no errors across 93 tables.
+and Oulad Aissa also exist in other regions). It exits with code 1 while errors remain.
+
+Sums of counts must be exact (a rounding margin of 0.05 applies only to values with
+decimals), and the communes of each province must add up to its total. Every table that
+`app.py` repeats from `hcpdata.py` is compared value by value with its copy; the copy is
+found from the structure of the table and its year, never from values that already agree,
+and the housing tables, which all share one structure, are paired by name (`COPY_OF`).
+
+The 93 tables it reads are 48 tables in `hcpdata.py` and 45 in `app.py`, all 45 of which
+are copies of a table in `hcpdata.py`. On the current data it reports no errors and two
+known discrepancies, listed in `KNOWN_DISCREPANCIES` and reported as warnings until they
+are checked against the publication: in the 2018 first-year enrolment table, boys plus girls
+in Tiznit make 3,828 while the total is 3,826 (every column adds up, which points to the
+published table), and in the 2017 investment projects table the Total row differs by 1 from
+the sum of the provinces in three columns.
+
+These checks test internal consistency only: a value can be consistent with its totals and
+still be mistyped. They do not compare the tables with the HCP publications.
+
+```bash
+python test_validate_data.py
+```
+
+Introduces one error at a time in a temporary copy of the data (a count total off by 1 in
+both copies, the regional population off by 0.75 %, a commune total off by 1, an `app.py`
+copy that differs, a 2018 table filled with the 2017 figures, a housing table filled with
+another housing table) and checks that `validate_data.py` reports each of them, and that the
+unmodified data pass.
 
 ## Poverty analysis (case study)
 
@@ -222,7 +254,7 @@ Two points are documented rather than checked automatically:
 - The RGPH 2004 urban population of Chtouka-Aït Baha is not given directly in any
   HCP sheet. It is set to 39,694, the value for which the province figures add up
   exactly to the published regional total; this is an inference, not a published
-  figure.
+  figure. The app says so under every table, map and comment that shows it.
 - On the commune poverty map, the central KPI is the unweighted mean of commune
   rates (not a population-weighted regional rate) and is labelled as such.
 
@@ -234,6 +266,10 @@ and drops aggregate rows before ranking or summing: labels that are a total ("To
 "… Urbain", "… Rural"), and a lone "Région …" row in a file of other territories. The
 PDF states how many rows were dropped, and `validate_data.py` does not inspect uploaded files.
 Charts are written to a temporary directory that is deleted as soon as the PDF is built.
+A PDF is offered for download only while the file and the settings it was built from are
+unchanged. Characters outside the Latin alphabet cannot be written with the PDF's built-in
+fonts; the app says so before building the report instead of replacing them silently. Uploads
+are limited to 10 MB (`.streamlit/config.toml`).
 
 ## Notes and Limitations
 
