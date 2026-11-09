@@ -45,6 +45,29 @@ def sans_agregats(df, colonne):
     return df[~agregat].reset_index(drop=True)
 
 
+AUTRES_NON_AFFICHES = "Autres (non affichés)"
+
+
+def completer_au_total(df_plot, col_nom, total, col_valeur="Valeur", groupe=None):
+    """Ajoute la part « Autres (non affichés) » pour que les parts d'un camembert, d'une treemap ou
+    d'un graphique en % restent rapportées au total publié quand des catégories sont décochées.
+    `total` est un nombre, ou un dict {valeur de `groupe`: total} pour plusieurs groupes."""
+    lignes = []
+    groupes = [None] if groupe is None else df_plot[groupe].unique().tolist()
+    for g in groupes:
+        part = df_plot if g is None else df_plot[df_plot[groupe] == g]
+        t = total if g is None else total[g]
+        reste = float(t) - float(part[col_valeur].sum())
+        if reste > 1e-9 * max(1.0, abs(float(t))):
+            ligne = {col_nom: AUTRES_NON_AFFICHES, col_valeur: reste}
+            if g is not None:
+                ligne[groupe] = g
+            lignes.append(ligne)
+    if not lignes:
+        return df_plot
+    return pd.concat([df_plot, pd.DataFrame(lignes)], ignore_index=True)
+
+
 # --- Configuration page ---
 st.set_page_config(
     page_title="Axiora Data",
@@ -2531,17 +2554,25 @@ elif st.session_state.page == "Marche de Travail":
                     df_plot = pd.concat([df_plot, pd.DataFrame({"Catégorie": [cat], "Valeur": [valeur]})],
                                         ignore_index=True)
 
+                fig = None
                 if graph_type == "Barres":
                     fig = px.bar(df_plot, x="Catégorie", y="Valeur", color="Catégorie", text="Valeur",
                                  color_discrete_sequence=custom_palette)
                     fig.update_traces(textposition="outside")
 
                 elif graph_type == "Camembert":
-                    # Le camembert ne montre que les parts hommes / femmes : le total en serait la somme.
-                    fig = px.pie(df_plot[df_plot["Catégorie"] != "Total"], names="Catégorie", values="Valeur",
-                                 color_discrete_sequence=custom_palette)
+                    # Le camembert ne montre que les parts hommes / femmes, rapportées au total publié :
+                    # une catégorie décochée reste comptée dans « Autres (non affichés) ».
+                    parts = df_plot[df_plot["Catégorie"] != "Total"]
+                    total_milieu = df_sexe.loc[df_sexe["Milieu"] == milieu_select, "Total"].values[0]
+                    if parts.empty:
+                        st.warning("⚠ Le camembert montre la répartition par sexe : cochez Masculin et/ou Féminin.")
+                    else:
+                        fig = px.pie(completer_au_total(parts, "Catégorie", total_milieu), names="Catégorie",
+                                     values="Valeur", color_discrete_sequence=custom_palette)
 
-                st.plotly_chart(fig, width="stretch")
+                if fig is not None:
+                    st.plotly_chart(fig, width="stretch")
             else:
                 st.warning("⚠ Veuillez sélectionner au moins une catégorie !")
 
@@ -2685,15 +2716,18 @@ elif st.session_state.page == "Marche de Travail":
                     df_plot = pd.concat([df_plot, pd.DataFrame({"Branche": [br], "Valeur": [valeur]})],
                                         ignore_index=True)
 
+                # Parts rapportées au total publié du milieu : les branches décochées restent dans
+                # « Autres (non affichés) » au lieu de gonfler les parts des branches affichées.
+                total_milieu = df_secteurs.loc[df_secteurs["Milieu"] == milieu_select, "Total"].values[0]
+                df_parts = completer_au_total(df_plot, "Branche", total_milieu)
+
                 if graph_type == "Pie":
                     custom_palette = ["#A3C1AD", "#F6C3B7", "#F7E3AF", "#C1D3E0", "#D6A3C1", "#E0D3B8"]
-
-                    # Exemple dans le graphique : Pie
-                    fig = px.pie(df_plot, names="Branche", values="Valeur", color="Branche",
+                    fig = px.pie(df_parts, names="Branche", values="Valeur", color="Branche",
                                  color_discrete_sequence=custom_palette)
 
                 elif graph_type == "Treemap":
-                    fig = px.treemap(df_plot, path=["Branche"], values="Valeur", color="Branche",
+                    fig = px.treemap(df_parts, path=["Branche"], values="Valeur", color="Branche",
                                      color_discrete_sequence=custom_palette)
 
 
@@ -2774,8 +2808,10 @@ elif st.session_state.page == "Marche de Travail":
                                  color_discrete_sequence=custom_palette)
 
                 elif graph_type_comp == "Parts en %":
-                    # Part de chaque branche dans l'emploi du milieu : compare des milieux de tailles différentes.
-                    df_pct = df_melted.copy()
+                    # Part de chaque branche dans l'emploi du milieu (total publié) : compare des milieux de
+                    # tailles différentes ; les branches décochées sont regroupées dans « Autres (non affichés) ».
+                    totaux = dict(zip(df_secteurs["Milieu"], df_secteurs["Total"]))
+                    df_pct = completer_au_total(df_melted, "Branche", totaux, groupe="Milieu")
                     df_pct["Part (%)"] = (100 * df_pct["Valeur"]
                                           / df_pct.groupby("Milieu")["Valeur"].transform("sum")).round(1)
                     fig = px.bar(df_pct, x="Milieu", y="Part (%)", color="Branche", barmode="stack",
@@ -2849,12 +2885,16 @@ elif st.session_state.page == "Marche de Travail":
                     df_plot = pd.concat([df_plot, pd.DataFrame({"Statut": [statut], "Valeur": [valeur]})],
                                         ignore_index=True)
 
+                # Parts rapportées au total publié du milieu (ligne "Total" du tableau).
+                total_milieu = df_statut.loc[df_statut["Statut"] == "Total", milieu_select].values[0]
+                df_parts = completer_au_total(df_plot, "Statut", total_milieu)
+
                 if graph_type == "Pie":
-                    fig = px.pie(df_plot, names="Statut", values="Valeur", color="Statut",
+                    fig = px.pie(df_parts, names="Statut", values="Valeur", color="Statut",
                                  color_discrete_sequence=custom_palette)
 
                 elif graph_type == "Treemap":
-                    fig = px.treemap(df_plot, path=["Statut"], values="Valeur", color="Statut",
+                    fig = px.treemap(df_parts, path=["Statut"], values="Valeur", color="Statut",
                                      color_discrete_sequence=custom_palette)
 
 
@@ -2924,7 +2964,10 @@ elif st.session_state.page == "Marche de Travail":
                                  color_discrete_sequence=custom_palette)
 
                 elif graph_type_comp == "Parts en %":
-                    df_pct = df_melted.copy()
+                    # Part de chaque statut dans le total publié du milieu ; statuts décochés regroupés.
+                    ligne_total = df_statut[df_statut["Statut"] == "Total"].iloc[0]
+                    totaux = {m: ligne_total[m] for m in ["Urbain", "Rural", "Total"]}
+                    df_pct = completer_au_total(df_melted, "Statut", totaux, groupe="Milieu")
                     df_pct["Part (%)"] = (100 * df_pct["Valeur"]
                                           / df_pct.groupby("Milieu")["Valeur"].transform("sum")).round(1)
                     fig = px.bar(df_pct, x="Milieu", y="Part (%)", color="Statut", barmode="stack",
@@ -3585,6 +3628,11 @@ elif st.session_state.page == "Habitat":
                     )
                     fig_map.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0}, height=600)
                     st.plotly_chart(fig_map, width="stretch")
+                    absentes = sorted(set(gdf_provinces.loc[gdf_provinces["ADM1_PCODE"] == "MA009", "ADM2_FR"])
+                                      - set(gdf_merged["ADM2_FR"]))
+                    if absentes:
+                        st.caption("Sans données publiées pour cette sélection (non coloriées) : "
+                                   + ", ".join(absentes) + ".")
 
                 with col2:
                     df_sorted = gdf_merged.sort_values(by="Valeur", ascending=False)
@@ -3726,12 +3774,14 @@ elif st.session_state.page == "Finance":
             fig.update_layout(showlegend=False)
             return fig
 
-        def camemberts_par_indicateur(df_long, noms, palette):
-            """Un camembert par indicateur : chaque indicateur se répartit entre les territoires."""
+        def camemberts_par_indicateur(df_long, noms, palette, totaux):
+            """Un camembert par indicateur : chaque indicateur se répartit entre les territoires.
+            Les parts sont rapportées à `totaux` ({indicateur: total des six provinces}) : les provinces
+            décochées restent comptées dans « Autres (non affichés) »."""
             cols = df_long["Colonne"].unique().tolist()
             fig = go.Figure()
             for k, c in enumerate(cols):
-                d = df_long[df_long["Colonne"] == c]
+                d = completer_au_total(df_long[df_long["Colonne"] == c], noms, totaux[c])
                 fig.add_trace(go.Pie(labels=d[noms], values=d["Valeur"], title=c, hole=0.3,
                                      textinfo="percent", marker=dict(colors=palette),
                                      domain=dict(x=[k / len(cols), (k + 1) / len(cols) - 0.02])))
@@ -3795,7 +3845,8 @@ elif st.session_state.page == "Finance":
                         fig = px.bar(df_long, x="Province", y="Valeur", color="Colonne",
                                      barmode="group", color_discrete_sequence=custom_palette)
                     elif graph_type == "Parts par province":
-                        fig = camemberts_par_indicateur(df_long, "Province", px.colors.qualitative.Pastel)
+                        fig = camemberts_par_indicateur(df_long, "Province", px.colors.qualitative.Pastel,
+                                                        df_banques.iloc[:, 1:].sum().to_dict())
                     else:
                         d = df_banques[df_banques["Province"].isin(province_select)]
                         ratio = (100 * d["Montant des crédits (en milliers)"]
@@ -3884,7 +3935,9 @@ elif st.session_state.page == "Finance":
                     if graph_type_proj == "Barres par indicateur":
                         fig = barres_par_indicateur(df_long_proj, "Provinces", custom_palette_pastel)
                     else:
-                        fig = camemberts_par_indicateur(df_long_proj, "Provinces", px.colors.qualitative.Pastel)
+                        fig = camemberts_par_indicateur(
+                            df_long_proj, "Provinces", px.colors.qualitative.Pastel,
+                            df_projets[df_projets["Provinces"] != "Total"].iloc[:, 1:].sum().to_dict())
                     fig.update_layout(
                         font=dict(family="Arial", size=12, color="#000000"),
                         height=400,
@@ -3966,11 +4019,14 @@ elif st.session_state.page == "Finance":
                     ind = indicateurs_select[0]
                     if len(indicateurs_select) > 1:
                         st.caption(f"Un camembert ou une treemap montre un seul indicateur : {ind}.")
+                    # Parts rapportées au total des sept secteurs ; secteurs décochés regroupés.
+                    d_parts = completer_au_total(df_sect[["Secteur d’Activité", ind]].rename(columns={ind: "Valeur"}),
+                                                 "Secteur d’Activité", df_sectoriel[ind].sum())
                     if graph_type_sectoriel == "Pie Chart":
-                        fig = px.pie(df_sect, names="Secteur d’Activité", values=ind, title=ind,
+                        fig = px.pie(d_parts, names="Secteur d’Activité", values="Valeur", title=ind,
                                      color_discrete_sequence=custom_palette_sectoriel)
                     else:
-                        fig = px.treemap(df_sect, path=["Secteur d’Activité"], values=ind, title=ind,
+                        fig = px.treemap(d_parts, path=["Secteur d’Activité"], values="Valeur", title=ind,
                                          color="Secteur d’Activité", color_discrete_sequence=custom_palette_sectoriel)
                     st.plotly_chart(fig, width="stretch")
         with col3s:
@@ -4110,18 +4166,21 @@ elif st.session_state.page == "Finance":
 
                 elif graph_type_secteurs == "Pie Chart":
                     if len(indicateurs_select_secteurs) == 1:
-                        fig = px.pie(df_filtered, names="Secteur d’Activité", values=indicateurs_select_secteurs[0],
+                        ind = indicateurs_select_secteurs[0]
+                        d_parts = completer_au_total(df_filtered[["Secteur d’Activité", ind]].rename(columns={ind: "Valeur"}),
+                                                     "Secteur d’Activité", df_secteurs[ind].sum())
+                        fig = px.pie(d_parts, names="Secteur d’Activité", values="Valeur", title=ind,
                                      color_discrete_sequence=custom_palette_secteurs)
                         st.plotly_chart(fig, width="stretch")
-                        if len(df_filtered) < len(df_secteurs):
-                            st.caption("Parts recalculées sur les secteurs sélectionnés seulement.")
                     else:
                         st.warning("⚠ Sélectionnez un seul indicateur pour le camembert.")
 
                 elif graph_type_secteurs == "Treemap":
                     if len(indicateurs_select_secteurs) == 1:
-                        fig = px.treemap(df_filtered, path=["Secteur d’Activité"],
-                                         values=indicateurs_select_secteurs[0],
+                        ind = indicateurs_select_secteurs[0]
+                        d_parts = completer_au_total(df_filtered[["Secteur d’Activité", ind]].rename(columns={ind: "Valeur"}),
+                                                     "Secteur d’Activité", df_secteurs[ind].sum())
+                        fig = px.treemap(d_parts, path=["Secteur d’Activité"], values="Valeur", title=ind,
                                          color="Secteur d’Activité",
                                          color_discrete_sequence=custom_palette_secteurs)
                         st.plotly_chart(fig, width="stretch")
@@ -4222,7 +4281,10 @@ elif st.session_state.page == "Finance":
 
                 elif graph_type_pib == "Pie Chart":
                     if len(indicateurs_select_pib) == 1:
-                        fig = px.pie(df_filtered, names="Secteurs", values=indicateurs_select_pib[0],
+                        ind = indicateurs_select_pib[0]
+                        d_parts = completer_au_total(df_filtered[["Secteurs", ind]].rename(columns={ind: "Valeur"}),
+                                                     "Secteurs", df_pib[ind].sum())
+                        fig = px.pie(d_parts, names="Secteurs", values="Valeur", title=ind,
                                      color_discrete_sequence=custom_palette_pib)
                         st.plotly_chart(fig, width="stretch")
                     else:
@@ -4230,8 +4292,10 @@ elif st.session_state.page == "Finance":
 
                 elif graph_type_pib == "Treemap":
                     if len(indicateurs_select_pib) == 1:
-                        fig = px.treemap(df_filtered, path=["Secteurs"],
-                                         values=indicateurs_select_pib[0],
+                        ind = indicateurs_select_pib[0]
+                        d_parts = completer_au_total(df_filtered[["Secteurs", ind]].rename(columns={ind: "Valeur"}),
+                                                     "Secteurs", df_pib[ind].sum())
+                        fig = px.treemap(d_parts, path=["Secteurs"], values="Valeur", title=ind,
                                          color="Secteurs",
                                          color_discrete_sequence=custom_palette_pib)
                         st.plotly_chart(fig, width="stretch")
@@ -4243,19 +4307,21 @@ elif st.session_state.page == "Finance":
                         # Parts sectorielles en % : la région et le Maroc n'ont pas la même taille.
                         df_radar = df_filtered.melt(id_vars="Secteurs", value_vars=indicateurs_select_pib,
                                                     var_name="Série", value_name="PIB")
+                        # Dénominateur : total des trois secteurs de la série, même si un secteur est décoché.
                         df_radar["Part (%)"] = (100 * df_radar["PIB"]
-                                                / df_radar.groupby("Série")["PIB"].transform("sum")).round(1)
+                                                / df_radar["Série"].map(df_pib[indicateurs_select_pib].sum())).round(1)
                         fig = px.line_polar(df_radar, r="Part (%)", theta="Secteurs", color="Série",
                                             line_close=True, markers=True,
                                             color_discrete_sequence=custom_palette_pib)
                         st.plotly_chart(fig, width="stretch")
 
                 elif graph_type_pib == "Heatmap":
-                    # Part de chaque secteur dans le PIB de la colonne (%), comparable entre région et Maroc.
+                    # Part de chaque secteur dans le total des trois secteurs de la colonne (%), comparable
+                    # entre région et Maroc. Le dénominateur reste ce total quand un secteur est décoché.
                     df_heatmap = df_filtered.set_index("Secteurs")[indicateurs_select_pib]
-                    df_heatmap = (100 * df_heatmap / df_heatmap.sum()).round(1)
-                    fig = px.imshow(df_heatmap, text_auto=True, aspect="auto",
-                                    color_continuous_scale="YlGnBu", labels=dict(color="Part du PIB (%)"))
+                    df_heatmap = (100 * df_heatmap / df_pib[indicateurs_select_pib].sum()).round(1)
+                    fig = px.imshow(df_heatmap, text_auto=True, aspect="auto", color_continuous_scale="YlGnBu",
+                                    labels=dict(color="Part du total des 3 secteurs (%)"))
                     st.plotly_chart(fig, width="stretch")
 
         # ================== COLONNE 3 : TABLEAU ==================
@@ -5089,6 +5155,9 @@ elif st.session_state.page == "Enseignement":
                     if is_gendered_theme:
                         all_generated_points = []
                         POINTS_SCALE_FACTOR = 40
+                        # Graine fixe : la carte est la même à chaque affichage (la position des points
+                        # est fictive, seul leur nombre par province porte l'information).
+                        random.seed(2017)
 
                         for _, row in gdf_merged.iterrows():
                             num_dots = int(row['Valeur'] / POINTS_SCALE_FACTOR)
@@ -5128,6 +5197,10 @@ elif st.session_state.page == "Enseignement":
 
                     fig_map.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0}, height=600, legend_title_text='')
                     st.plotly_chart(fig_map, width="stretch")
+                    if is_gendered_theme:
+                        st.caption(f"1 point = {POINTS_SCALE_FACTOR} personnes (arrondi à l'inférieur). Les points "
+                                   "sont placés au hasard dans la province : leur position ne représente pas "
+                                   "l'emplacement des établissements.")
 
                 with col2:
 
@@ -5620,37 +5693,57 @@ elif st.session_state.page == "Generateur Rapport & statistiques":
             cols = [group_idx, value_idx] if item_idx is None else [group_idx, item_idx, value_idx]
             df_selected = df.iloc[:, cols].copy()
 
+            n_read = len(df_selected)  # toutes les lignes du fichier, y compris en-têtes et lignes vides
+
             if item_idx is None:
                 df_selected.columns = ["Group", "Value"]
-                df_selected["Item"] = df_selected["Group"].astype(str)
             else:
                 df_selected.columns = ["Group", "Item", "Value"]
 
-            df_selected = df_selected[df_selected["Group"].notna()]
-            df_selected["Group"] = df_selected["Group"].astype(str).str.strip()
-            df_selected["Item"] = df_selected["Item"].fillna("").astype(str).str.strip()
+            df_selected["Group"] = df_selected["Group"].fillna("").astype(str).str.strip()
+            if item_idx is None:
+                df_selected["Item"] = df_selected["Group"]
+            else:
+                df_selected["Item"] = df_selected["Item"].fillna("").astype(str).str.strip()
 
             def lire_nombre(v):
-                """Nombre écrit à l'anglaise ou à la française : 1234.5, 1 234,5, 12,7 %."""
-                if isinstance(v, (int, float, np.number)) and not isinstance(v, bool):
-                    return float(v)
+                """Nombre écrit à l'anglaise ou à la française : 1234.5, 1 234,5, 1.234,5, 1,234.5,
+                1.234.567, 12,7 %, (12) pour -12. Une virgule seule est décimale (1,234 = 1,234).
+                Renvoie NaN si la valeur n'est pas un nombre fini."""
+                if isinstance(v, (int, float, np.number)) and not isinstance(v, (bool, np.bool_)):
+                    x = float(v)
+                    return x if np.isfinite(x) else np.nan
                 if not isinstance(v, str):
                     return np.nan
                 t = v.replace("\u00a0", "").replace("\u202f", "").replace(" ", "").replace("%", "").strip()
-                if "," in t and "." not in t:
-                    t = t.replace(",", ".")
-                elif "," in t and "." in t:
-                    t = t.replace(",", "")
+                negatif = t.startswith("(") and t.endswith(")")
+                if negatif:
+                    t = t[1:-1]
+                if "," in t and "." in t:
+                    # Le séparateur le plus à droite est la décimale, l'autre sépare les milliers.
+                    if t.rfind(",") > t.rfind("."):
+                        t = t.replace(".", "").replace(",", ".")
+                    else:
+                        t = t.replace(",", "")
+                elif t.count(".") > 1:
+                    t = t.replace(".", "")  # 1.234.567 : points de milliers
+                elif t.count(",") > 1:
+                    t = t.replace(",", "")  # 1,234,567 : virgules de milliers
+                elif "," in t:
+                    t = t.replace(",", ".")  # 12,7 : virgule décimale
                 try:
-                    return float(t)
+                    x = float(t)
                 except ValueError:
                     return np.nan
+                if not np.isfinite(x):
+                    return np.nan
+                return -x if negatif else x
 
-            n_read = len(df_selected)
             df_selected["Value"] = df_selected["Value"].map(lire_nombre)
             df_selected = df_selected.dropna(subset=["Value"])
-            df_selected = df_selected[(df_selected["Group"] != "") & (df_selected["Item"] != "")]
             n_numeric = len(df_selected)
+            df_selected = df_selected[(df_selected["Group"] != "") & (df_selected["Item"] != "")]
+            n_labelled = len(df_selected)
 
             # Lignes d'agrégat : le libellé EST un total (« Total », « Total région », « Ensemble »,
             # « Sous-total… ») ou se termine par un sous-total (« Province de Tata Ensemble/Urbain/Rural »).
@@ -5671,6 +5764,7 @@ elif st.session_state.page == "Generateur Rapport & statistiques":
             mask_summary = agregat("Item") | agregat("Group")
             df_selected = df_selected[~mask_summary].copy()
             df_selected.attrs["cleaning"] = {"read": n_read, "non_numeric": n_read - n_numeric,
+                                             "no_label": n_numeric - n_labelled,
                                              "aggregates": int(mask_summary.sum()), "kept": len(df_selected)}
 
             return df_selected
@@ -5853,8 +5947,14 @@ elif st.session_state.page == "Generateur Rapport & statistiques":
 
             # Insights simples (génériques)
             gap = float(max_row["Value"] - min_row["Value"])
-            cv = std_val / abs(mean_val) if mean_val else float("nan")
-            dispersion = "faible" if cv < 0.1 else "marquée"
+            # Coefficient de variation : n'a de sens que pour des valeurs positives (moyenne non nulle).
+            cv = std_val / mean_val if (mean_val > 0 and df_clean["Value"].min() >= 0) else float("nan")
+            if np.isnan(cv):
+                dispersion = ("Dispersion : coefficient de variation non calculé (valeurs négatives ou "
+                              "moyenne nulle) ; voir l'écart-type et l'écart max-min.")
+            else:
+                dispersion = (f"Dispersion : l'écart-type vaut {cv:.0%} de la moyenne "
+                              f"(coefficient de variation {cv:.2f}).")
             best_group = group_tab.iloc[0]["Group"] if not group_tab.empty else "N/A"
 
             executive_summary = (
@@ -5889,6 +5989,7 @@ elif st.session_state.page == "Generateur Rapport & statistiques":
                     "bullets": [
                         f"Lignes lues : {cleaning.get('read', n_rows)}",
                         f"Lignes sans valeur numérique écartées : {cleaning.get('non_numeric', 0)}",
+                        f"Lignes sans libellé (groupe ou élément vide) écartées : {cleaning.get('no_label', 0)}",
                         f"Lignes d'agrégat écartées (total, ensemble...) : {cleaning.get('aggregates', 0)}",
                         f"Lignes conservées : {n_rows}",
                         f"Groupes uniques : {n_groups}",
@@ -5930,7 +6031,7 @@ elif st.session_state.page == "Generateur Rapport & statistiques":
                         "Elle indique où se situent les écarts et comment exploiter ces résultats."
                     ),
                     "bullets": [
-                        f"Hétérogénéité : dispersion {dispersion} (coefficient de variation {cv:.2f}, seuil 0,10).",
+                        dispersion,
                         f"Écart max-min : {fmt_num(gap)}, amplitude des différences à expliquer.",
                         f"Groupe à la moyenne la plus élevée : {best_group}. Selon l'indicateur, une valeur élevée peut être favorable ou non (un taux de pauvreté, par exemple).",
                         "Recommandation : compléter avec des variables explicatives (contexte, ressources, profils) pour interpréter les écarts.",
@@ -6080,7 +6181,17 @@ elif st.session_state.page == "Generateur Rapport & statistiques":
             group_idx = item_idx = value_idx = None
 
             if uploaded_file is not None:
-                df_raw = pd.read_excel(uploaded_file, header=None)
+                try:
+                    df_raw = pd.read_excel(uploaded_file, header=None)
+                except Exception:
+                    st.error("Ce fichier n'a pas pu être lu comme un classeur Excel (.xlsx). "
+                             "Il est peut-être corrompu ou protégé par un mot de passe.")
+                    df_raw = None
+            if df_raw is not None and df_raw.shape[1] == 0:
+                st.error("Le fichier ne contient aucune colonne exploitable.")
+                df_raw = None
+
+            if df_raw is not None:
                 st.markdown("**Aperçu (5 lignes) :**")
                 st.dataframe(df_raw.head(5), width="stretch")
 
@@ -6109,10 +6220,14 @@ elif st.session_state.page == "Generateur Rapport & statistiques":
                 if st.button("Créer le PDF", type="primary", width="stretch"):
                     with st.spinner("Nettoyage, analyse, comparaison et génération du PDF..."):
 
-                        df_clean = prepare_generic_data(df_raw, group_idx, item_idx, value_idx)
-
                         if value_idx in (group_idx, item_idx):
+                            df_clean = None
                             st.error("La colonne Valeur doit être différente des colonnes Groupe et Élément.")
+                        else:
+                            df_clean = prepare_generic_data(df_raw, group_idx, item_idx, value_idx)
+
+                        if df_clean is None:
+                            pass
                         elif df_clean.empty:
                             st.error("Impossible d'analyser : vérifiez vos colonnes (valeur numérique requise).")
                         else:
@@ -6120,42 +6235,47 @@ elif st.session_state.page == "Generateur Rapport & statistiques":
                             st.success("Données nettoyées (aperçu) :")
                             st.dataframe(df_clean.head(10), width="stretch")
 
-                            # Graph UI (Plotly)
+                            # Graph UI (Plotly) : même étiquette « élément (groupe) » que le graphique du PDF,
+                            # sinon deux éléments de même nom dans deux groupes seraient empilés en une barre.
+                            df_top = df_clean.sort_values("Value", ascending=False).head(int(top_n_chart)).copy()
+                            df_top["Libellé"] = [f"{it} ({gr})" for gr, it in zip(df_top["Group"], df_top["Item"])]
                             fig_ui = px.bar(
-                                df_clean.sort_values("Value", ascending=False).head(int(top_n_chart)),
-                                x="Item",
+                                df_top,
+                                x="Libellé",
                                 y="Value",
                                 color="Group",
                                 title=f"Top {top_n_chart} items (Value)"
                             )
+                            fig_ui.update_xaxes(title=None)
                             st.plotly_chart(fig_ui, width="stretch")
 
-                            # Export charts for PDF
+                            # Export charts for PDF : dossier temporaire supprimé dès le PDF construit,
+                            # aucun graphique tiré du fichier importé ne reste sur le serveur.
                             import tempfile
-                            tmp_dir = tempfile.mkdtemp(prefix="axiora_")
-                            p_top_items = save_chart_top_items(df_clean, os.path.join(tmp_dir, "top_items.png"), top_n=top_n_chart)
-                            p_group_means = save_chart_group_means(df_clean, os.path.join(tmp_dir, "group_means.png"), top_g=top_g_chart)
+                            with tempfile.TemporaryDirectory(prefix="axiora_") as tmp_dir:
+                                p_top_items = save_chart_top_items(df_clean, os.path.join(tmp_dir, "top_items.png"), top_n=top_n_chart)
+                                p_group_means = save_chart_group_means(df_clean, os.path.join(tmp_dir, "group_means.png"), top_g=top_g_chart)
 
-                            sections, meta = build_report_sections(
-                                df_clean=df_clean,
-                                objective=objective,
-                                top_n_items=top_n_items,
-                                top_n_chart=top_n_chart,
-                                top_g_chart=top_g_chart
-                            )
+                                sections, meta = build_report_sections(
+                                    df_clean=df_clean,
+                                    objective=objective,
+                                    top_n_items=top_n_items,
+                                    top_n_chart=top_n_chart,
+                                    top_g_chart=top_g_chart
+                                )
 
-                            charts_paths = {"top_items": p_top_items, "group_means": p_group_means}
+                                charts_paths = {"top_items": p_top_items, "group_means": p_group_means}
 
-                            pdf_bytes = create_pdf_report(
-                                report_title=report_title,
-                                author=author_name,
-                                organization=organization,
-                                objective=objective,
-                                df_clean=df_clean,
-                                charts_paths=charts_paths,
-                                sections=sections,
-                                executive_summary=meta["executive_summary"]
-                            )
+                                pdf_bytes = create_pdf_report(
+                                    report_title=report_title,
+                                    author=author_name,
+                                    organization=organization,
+                                    objective=objective,
+                                    df_clean=df_clean,
+                                    charts_paths=charts_paths,
+                                    sections=sections,
+                                    executive_summary=meta["executive_summary"]
+                                )
 
                             st.session_state.pdf_bytes = pdf_bytes
                             st.session_state.report_title = report_title
@@ -6301,8 +6421,38 @@ elif st.session_state.page == "assistant axiora data":
             st.warning("L'assistant nécessite une clé Gemini : ajoutez GEMINI_API_KEY dans "
                        ".streamlit/secrets.toml (voir le README). Les autres modules fonctionnent sans.")
             st.stop()
+        import time
+        import threading
+
+        # ====== Limites d'usage ======
+        # Chaque question envoie toutes les tables (environ 22 000 tokens) avec la clé du projet :
+        # sans limite, un seul visiteur pourrait épuiser le quota et rendre l'assistant indisponible.
+        MAX_QUESTIONS_SESSION = 6      # par minute et par session
+        MAX_QUESTIONS_GLOBAL = 20      # par minute, toutes sessions confondues
+        MAX_CARACTERES = 500
+        MAX_ECHANGES_HISTORIQUE = 6    # derniers échanges transmis pour les questions de suite
+
+        @st.cache_resource
+        def compteur_global():
+            """Horodatages partagés par toutes les sessions du serveur (protégés par un verrou)."""
+            return {"verrou": threading.Lock(), "appels": []}
+
+        def quota_disponible():
+            maintenant = time.time()
+            session = [t for t in st.session_state.get("appels_assistant", []) if maintenant - t < 60]
+            st.session_state.appels_assistant = session
+            if len(session) >= MAX_QUESTIONS_SESSION:
+                return False, int(60 - (maintenant - session[0])) + 1
+            g = compteur_global()
+            with g["verrou"]:
+                g["appels"] = [t for t in g["appels"] if maintenant - t < 60]
+                if len(g["appels"]) >= MAX_QUESTIONS_GLOBAL:
+                    return False, int(60 - (maintenant - g["appels"][0])) + 1
+                g["appels"].append(maintenant)
+            session.append(maintenant)
+            return True, 0
+
         genai.configure(api_key=gemini_key)
-        model = genai.GenerativeModel('gemini-2.5-flash')
 
         # Passer en mode large (full width)
         st.set_page_config(layout="wide")
@@ -6316,12 +6466,11 @@ elif st.session_state.page == "assistant axiora data":
             l'année et la source de chaque chiffre."""
             return {"sources": SOURCES, "donnees": hcp_data}
 
-        # ====== Réponse de l'assistant ======
-        def response_to_query(query: str) -> str:
-            hcp_definition = "Le HCP (Haut-Commissariat au Plan) est l'institution nationale chargée de la production, de l'analyse et de la diffusion des statistiques officielles au Maroc. Il joue un rôle crucial dans la planification économique et sociale en fournissant des données fiables sur des sujets tels que la population, l'emploi, l'économie, et le niveau de vie."
-
-            data_json = json.dumps(donnees_pour_assistant(), indent=2, ensure_ascii=False)
-            prompt = f"""
+        hcp_definition = "Le HCP (Haut-Commissariat au Plan) est l'institution nationale chargée de la production, de l'analyse et de la diffusion des statistiques officielles au Maroc. Il joue un rôle crucial dans la planification économique et sociale en fournissant des données fiables sur des sujets tels que la population, l'emploi, l'économie, et le niveau de vie."
+        data_json = json.dumps(donnees_pour_assistant(), indent=2, ensure_ascii=False)
+        # Les consignes et les données forment l'instruction système : elles ne sont envoyées qu'une fois
+        # par appel, et l'historique de la conversation s'y ajoute sans les répéter.
+        instruction_systeme = f"""
                     Tu es un assistant expert en données statistiques du HCP.
 
                     Si la question concerne la définition ou le rôle du HCP, réponds avec la définition suivante :
@@ -6333,18 +6482,32 @@ elif st.session_state.page == "assistant axiora data":
                     {data_json}
 
                     Si la question est hors de ces deux contextes, réponds que tu ne peux répondre qu'avec les données fournies.
-
-                    Question : {query}
+                    Quand une question fait suite à une précédente (« et pour Tata ? »), applique-la au sujet de l'échange précédent.
                     """
+        model = genai.GenerativeModel(
+            'gemini-2.5-flash',
+            system_instruction=instruction_systeme,
+            # Température basse : on attend des chiffres lus dans les tables, pas de la créativité.
+            generation_config={"temperature": 0.2},
+        )
+
+        # ====== Réponse de l'assistant ======
+        def response_to_query(query: str, historique) -> str:
+            """`historique` : messages précédents (sans la question courante). Seuls les échanges réussis
+            sont transmis, et seulement les derniers, pour limiter la taille de l'appel."""
+            contenus = []
+            echanges = [m for m in historique if not m.get("erreur")][-2 * MAX_ECHANGES_HISTORIQUE:]
+            for m in echanges:
+                contenus.append({"role": "user" if m["role"] == "user" else "model", "parts": [m["content"]]})
+            contenus.append({"role": "user", "parts": [query]})
             try:
-                # L'appel à generate_content gérera automatiquement l'appel à l'outil si nécessaire
-                resp = model.generate_content(prompt)
-                return resp.text
+                resp = model.generate_content(contenus)
+                return resp.text, False
             except Exception as e:
                 if "429" in str(e) or "quota" in str(e).lower():
                     return ("L'assistant a atteint sa limite de requêtes pour le moment. "
-                            "Réessayez un peu plus tard ; les tableaux de bord restent disponibles.")
-                return "Désolé, la réponse n'a pas pu être générée. Réessayez dans un instant."
+                            "Réessayez un peu plus tard ; les tableaux de bord restent disponibles."), True
+                return "Désolé, la réponse n'a pas pu être générée. Réessayez dans un instant.", True
 
 
         # ====== CSS ======
@@ -6378,13 +6541,23 @@ elif st.session_state.page == "assistant axiora data":
                         st.markdown(m["content"])  # Markdown sans HTML brut
 
         with st.container():
-            user_query = st.chat_input("Posez votre question sur les données HCP :")
+            user_query = st.chat_input("Posez votre question sur les données HCP :", max_chars=MAX_CARACTERES)
             if user_query:
-                st.session_state.messages.append({"role": "user", "content": user_query})
-                with st.spinner("Recherche dans les données..."):
-                    ai_response = response_to_query(user_query)
-                st.session_state.messages.append({"role": "assistant", "content": ai_response})
-                st.rerun()
+                user_query = user_query.strip()[:MAX_CARACTERES]
+                autorise, attente = quota_disponible()
+                if not autorise:
+                    st.warning(f"Trop de questions en peu de temps. Réessayez dans {attente} s.")
+                elif user_query:
+                    historique = list(st.session_state.messages)
+                    st.session_state.messages.append({"role": "user", "content": user_query})
+                    with st.spinner("Recherche dans les données..."):
+                        ai_response, erreur = response_to_query(user_query, historique)
+                    if erreur:
+                        # La question sans réponse ne doit pas être renvoyée comme contexte.
+                        st.session_state.messages[-1]["erreur"] = True
+                    st.session_state.messages.append({"role": "assistant", "content": ai_response,
+                                                      "erreur": erreur})
+                    st.rerun()
 
 
 
