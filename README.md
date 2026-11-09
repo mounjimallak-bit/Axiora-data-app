@@ -218,8 +218,11 @@ Two points are documented rather than checked automatically:
   rates (not a population-weighted regional rate) and is labelled as such.
 
 The PDF report generator operates on a file the user uploads, so its output
-depends on that file; it drops aggregate rows ("Total", "Région", "Ensemble")
-before ranking or summing, and `validate_data.py` does not inspect uploaded files.
+depends on that file. It reads numbers written in French format ("1 234,5", "12,7 %")
+and drops aggregate rows before ranking or summing: labels that are a total ("Total",
+"Ensemble", "Sous-total…"), labels ending with a subtotal ("Province de Tata Ensemble",
+"… Urbain", "… Rural"), and a lone "Région …" row in a file of other territories. The
+PDF states how many rows were dropped, and `validate_data.py` does not inspect uploaded files.
 
 ## Notes and Limitations
 
