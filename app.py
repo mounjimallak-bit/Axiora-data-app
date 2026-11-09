@@ -618,13 +618,13 @@ if st.session_state.page == "Population":
         with col1:
             st.markdown("<br><br><br><br><br>", unsafe_allow_html=True)
             st.markdown("""
-            Entre 2004 et 2014, la population des provinces a globalement augmenté .
+            Entre 2004 et 2014, la population de la région passe de 2 324 142 à 2 676 847 (+15,2 %) ; elle augmente dans quatre provinces sur six, Tiznit (−4,5 %) et Tata (−3,1 %) reculant.
 
             """)
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("""
 
-                       Une croissance plus marquée en milieu urbain.
+                       La population urbaine augmente de 37,6 %, contre 15,2 % pour l'ensemble.
                        """)
 
         # --- Col3 : options ---
@@ -2435,7 +2435,7 @@ elif st.session_state.page == "Marche de Travail":
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("""
 
-                        - La répartition nationale suit une logique mixte.  
+                        - Au niveau national, les 45 ans et plus forment le groupe le plus nombreux (33 %).  
                         """)
 
         with col2b:
@@ -2586,7 +2586,7 @@ elif st.session_state.page == "Marche de Travail":
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("""
 
-                        - La structure nationale est marquée par une forte disparité de genre.  
+                        - Les femmes représentent 29 % de la population active occupée de la région, et 26 % au niveau national.  
                         """)
 
         with col2b:
@@ -5638,19 +5638,49 @@ elif st.session_state.page == "Generateur Rapport & statistiques":
             else:
                 df_selected.columns = ["Group", "Item", "Value"]
 
+            df_selected = df_selected[df_selected["Group"].notna()]
             df_selected["Group"] = df_selected["Group"].astype(str).str.strip()
-            df_selected["Item"] = df_selected["Item"].astype(str).str.strip()
-            df_selected["Value"] = pd.to_numeric(df_selected["Value"], errors="coerce")
+            df_selected["Item"] = df_selected["Item"].fillna("").astype(str).str.strip()
+
+            def lire_nombre(v):
+                """Nombre écrit à l'anglaise ou à la française : 1234.5, 1 234,5, 12,7 %."""
+                if isinstance(v, (int, float, np.number)) and not isinstance(v, bool):
+                    return float(v)
+                if not isinstance(v, str):
+                    return np.nan
+                t = v.replace("\u00a0", "").replace("\u202f", "").replace(" ", "").replace("%", "").strip()
+                if "," in t and "." not in t:
+                    t = t.replace(",", ".")
+                elif "," in t and "." in t:
+                    t = t.replace(",", "")
+                try:
+                    return float(t)
+                except ValueError:
+                    return np.nan
+
             n_read = len(df_selected)
-            df_selected = df_selected.dropna(subset=["Group", "Item", "Value"])
+            df_selected["Value"] = df_selected["Value"].map(lire_nombre)
+            df_selected = df_selected.dropna(subset=["Value"])
+            df_selected = df_selected[(df_selected["Group"] != "") & (df_selected["Item"] != "")]
             n_numeric = len(df_selected)
 
-            # Lignes d'agrégat (total, ensemble, sous-total...) : mots entiers, dans le groupe ou l'élément,
-            # pour ne pas écarter une commune comme « Allougoum » parce qu'elle contient « all ».
-            summary_pattern = (r"\b(?:total|totaux|ensemble|sous-total|subtotal|sum|moyenne|average|r[ée]gion)\b"
-                               r"|^(?:province|pr[ée]fecture)\s+d")
-            mask_summary = (df_selected["Item"].str.lower().str.contains(summary_pattern, regex=True, na=False)
-                            | df_selected["Group"].str.lower().str.contains(summary_pattern, regex=True, na=False))
+            # Lignes d'agrégat : le libellé EST un total (« Total », « Total région », « Ensemble »,
+            # « Sous-total… ») ou se termine par un sous-total (« Province de Tata Ensemble/Urbain/Rural »).
+            # Un nom de territoire qui contient seulement le mot (« Région de l'Oriental ») est gardé ;
+            # « Région X » n'est écarté que si les autres lignes ne sont pas elles-mêmes des régions.
+            debut = r"^(?:total|totaux|ensemble|sous-total|subtotal|sum|moyenne|average)\b"
+            fin = r"\b(?:ensemble|total|urbain|rural)$"
+
+            def agregat(col):
+                lab = df_selected[col].str.lower()
+                m = lab.str.contains(debut, regex=True, na=False)
+                m |= lab.str.contains(r"^(?:province|pr[ée]fecture|r[ée]gion)\b.*" + fin, regex=True, na=False)
+                region = lab.str.contains(r"^r[ée]gion\b", regex=True, na=False)
+                if 0 < region.sum() <= max(1, len(lab) // 4):
+                    m |= region
+                return m
+
+            mask_summary = agregat("Item") | agregat("Group")
             df_selected = df_selected[~mask_summary].copy()
             df_selected.attrs["cleaning"] = {"read": n_read, "non_numeric": n_read - n_numeric,
                                              "aggregates": int(mask_summary.sum()), "kept": len(df_selected)}
@@ -6093,7 +6123,9 @@ elif st.session_state.page == "Generateur Rapport & statistiques":
 
                         df_clean = prepare_generic_data(df_raw, group_idx, item_idx, value_idx)
 
-                        if df_clean.empty:
+                        if value_idx in (group_idx, item_idx):
+                            st.error("La colonne Valeur doit être différente des colonnes Groupe et Élément.")
+                        elif df_clean.empty:
                             st.error("Impossible d'analyser : vérifiez vos colonnes (valeur numérique requise).")
                         else:
                             # Aperçu UI
