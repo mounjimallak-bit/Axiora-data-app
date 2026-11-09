@@ -5,7 +5,6 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 import numpy as np
-import google.generativeai as genai
 import json
 from hcpdata import hcp_data, SOURCES
 from fpdf import FPDF
@@ -46,6 +45,10 @@ def sans_agregats(df, colonne):
 
 
 AUTRES_NON_AFFICHES = "Autres (non affichés)"
+
+# Seule valeur des tables qui n'est pas lue dans une publication (voir le README) : elle est signalée
+# partout où elle est affichée.
+NOTE_CHTOUKA_2004 = "Chtouka-Aït Baha, RGPH 2004, urbain : 39 694 n'est pas publié par le HCP ; c'est la valeur pour laquelle les provinces somment au total régional publié (valeur déduite)."
 
 
 def completer_au_total(df_plot, col_nom, total, col_valeur="Valeur", groupe=None):
@@ -606,6 +609,7 @@ if st.session_state.page == "Population":
             st.markdown("<br><br>", unsafe_allow_html=True)
 
             st.dataframe(df_tableau, width="stretch")
+            st.caption(NOTE_CHTOUKA_2004)
         #############previsualisation tab 2
 
         st.markdown("""
@@ -635,7 +639,7 @@ if st.session_state.page == "Population":
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("""
 
-                       La population urbaine augmente de 37,6 %, contre 15,2 % pour l'ensemble.
+                       La population urbaine augmente de 37,6 %, contre 15,2 % pour l'ensemble (le chiffre urbain 2004 de Chtouka-Aït Baha est déduit, voir la note sous le tableau).
                        """)
 
         # --- Col3 : options ---
@@ -1373,6 +1377,8 @@ if st.session_state.page == "Population":
                                          sorted(df_indicateur['Année'].unique(), reverse=True))
         df_filtre = df_indicateur[df_indicateur['Année'] == annee_choisie].copy()
         st.caption(f"{theme_choisi} — {indicateur_choisi} — {annee_choisie}")
+        if theme_choisi == "Population Légale (RGPH)" and indicateur_choisi == "Urbain" and annee_choisie == "2004":
+            st.caption(NOTE_CHTOUKA_2004)
 
         if not df_filtre.empty:
             total_regional = f"{df_filtre['Valeur'].sum():,.0f}".replace(',', ' ')
@@ -3570,6 +3576,8 @@ elif st.session_state.page == "Habitat":
             indicateur_choisi = st.selectbox("2. Choisissez un indicateur :", df_statut['Indicateur'].unique())
 
         df_filtre = df_statut[df_statut['Indicateur'] == indicateur_choisi]
+        # Le bandeau ne répète pas l'unité : elle est dans le nom de l'indicateur (Ha, millions de DH...).
+        st.caption(f"{statut_choisi} — {indicateur_choisi} (total des provinces publiées)")
 
         # --- BANNIÈRE KPI ---
         if not df_filtre.empty:
@@ -4429,6 +4437,8 @@ elif st.session_state.page == "Finance":
         with col2_filter:
             indicateur_choisi = st.selectbox("2. Choisissez un indicateur :", df_theme['Indicateur'].unique())
         df_filtre = df_theme[df_theme['Indicateur'] == indicateur_choisi]
+        # Le bandeau ne répète pas l'unité : elle est dans le nom de l'indicateur (en milliers de DH...).
+        st.caption(f"{theme_choisi} — {indicateur_choisi}")
 
         # --- BANDEAU KPI ---
         if not df_filtre.empty:
@@ -6209,6 +6219,10 @@ elif st.session_state.page == "Generateur Rapport & statistiques":
                 value_idx = col_options.index(value_col)
                 item_idx = None if item_col == "Aucune" else col_options.index(item_col)
 
+        # Signature des entrées du rapport (contenu du fichier + colonnes + textes + réglages) : un PDF
+        # déjà généré n'est proposé au téléchargement que si rien n'a changé depuis sa création.
+        signature = None
+
         with st.expander("Étape 3 : Générer le PDF (analyse uniquement)", expanded=True):
             if df_raw is None:
                 st.info("Veuillez charger un fichier Excel pour activer la génération du rapport.")
@@ -6217,7 +6231,14 @@ elif st.session_state.page == "Generateur Rapport & statistiques":
                 top_n_chart = st.slider("Top N (graphique items)", 10, 50, 20, step=5)
                 top_g_chart = st.slider("Top groupes (graphique moyennes)", 5, 30, 15, step=5)
 
+                import hashlib
+                signature = (hashlib.sha256(uploaded_file.getvalue()).hexdigest(), group_idx, item_idx,
+                             value_idx, report_title, author_name, organization, objective,
+                             top_n_items, top_n_chart, top_g_chart)
+
                 if st.button("Créer le PDF", type="primary", width="stretch"):
+                    # Un nouvel essai remplace l'ancien rapport, même s'il échoue.
+                    st.session_state.pop("pdf_bytes", None)
                     with st.spinner("Nettoyage, analyse, comparaison et génération du PDF..."):
 
                         if value_idx in (group_idx, item_idx):
@@ -6232,6 +6253,17 @@ elif st.session_state.page == "Generateur Rapport & statistiques":
                             st.error("Impossible d'analyser : vérifiez vos colonnes (valeur numérique requise).")
                         else:
                             # Aperçu UI
+                            # Les polices intégrées du PDF ne couvrent que l'alphabet latin : les autres
+                            # caractères (arabe, par exemple) deviendraient « ? » sans que l'utilisateur le sache.
+                            textes = [report_title, author_name, organization, objective,
+                                      *df_clean["Group"].tolist(), *df_clean["Item"].tolist()]
+                            perdus = sorted({c for t in textes for c in str(t)
+                                             if c != "?" and PDF().safe(c) == "?"})
+                            if perdus:
+                                st.warning(f"{len(perdus)} caractère(s) ne peuvent pas être écrits dans le PDF "
+                                           f"(par exemple : {' '.join(perdus[:10])}) et y seront remplacés par « ? ». "
+                                           "Les libellés en alphabet latin s'affichent normalement.")
+
                             st.success("Données nettoyées (aperçu) :")
                             st.dataframe(df_clean.head(10), width="stretch")
 
@@ -6278,8 +6310,18 @@ elif st.session_state.page == "Generateur Rapport & statistiques":
                                 )
 
                             st.session_state.pdf_bytes = pdf_bytes
+                            st.session_state.pdf_signature = signature
+                            st.session_state.pdf_perime = False
                             st.session_state.report_title = report_title
                             st.success("PDF généré avec succès !")
+
+        # Un PDF créé avec un autre fichier ou d'autres réglages n'est plus proposé.
+        if "pdf_bytes" in st.session_state and st.session_state.get("pdf_signature") != signature:
+            del st.session_state["pdf_bytes"]
+            st.session_state.pdf_perime = True
+        if st.session_state.get("pdf_perime") and signature is not None:
+            st.info("Le fichier ou les réglages ont changé depuis le dernier rapport : "
+                    "cliquez sur « Créer le PDF » pour générer le rapport correspondant.")
 
         # Download
         if "pdf_bytes" in st.session_state:
@@ -6452,7 +6494,16 @@ elif st.session_state.page == "assistant axiora data":
             session.append(maintenant)
             return True, 0
 
-        genai.configure(api_key=gemini_key)
+        # SDK google-genai (le SDK google-generativeai n'est plus maintenu). Importé ici seulement :
+        # un problème avec ce paquet n'empêche pas les autres pages de fonctionner.
+        try:
+            from google import genai
+            from google.genai import types as genai_types
+            from google.genai import errors as genai_errors
+        except ImportError:
+            st.error("Le paquet google-genai n'est pas installé : l'assistant est indisponible.")
+            st.stop()
+        client_gemini = genai.Client(api_key=gemini_key)
 
         # Passer en mode large (full width)
         st.set_page_config(layout="wide")
@@ -6484,11 +6535,11 @@ elif st.session_state.page == "assistant axiora data":
                     Si la question est hors de ces deux contextes, réponds que tu ne peux répondre qu'avec les données fournies.
                     Quand une question fait suite à une précédente (« et pour Tata ? »), applique-la au sujet de l'échange précédent.
                     """
-        model = genai.GenerativeModel(
-            'gemini-2.5-flash',
+        MODELE_GEMINI = "gemini-2.5-flash"
+        config_gemini = genai_types.GenerateContentConfig(
             system_instruction=instruction_systeme,
             # Température basse : on attend des chiffres lus dans les tables, pas de la créativité.
-            generation_config={"temperature": 0.2},
+            temperature=0.2,
         )
 
         # ====== Réponse de l'assistant ======
@@ -6498,16 +6549,24 @@ elif st.session_state.page == "assistant axiora data":
             contenus = []
             echanges = [m for m in historique if not m.get("erreur")][-2 * MAX_ECHANGES_HISTORIQUE:]
             for m in echanges:
-                contenus.append({"role": "user" if m["role"] == "user" else "model", "parts": [m["content"]]})
-            contenus.append({"role": "user", "parts": [query]})
+                contenus.append({"role": "user" if m["role"] == "user" else "model",
+                                 "parts": [{"text": m["content"]}]})
+            contenus.append({"role": "user", "parts": [{"text": query}]})
             try:
-                resp = model.generate_content(contenus)
-                return resp.text, False
-            except Exception as e:
-                if "429" in str(e) or "quota" in str(e).lower():
+                resp = client_gemini.models.generate_content(model=MODELE_GEMINI, contents=contenus,
+                                                             config=config_gemini)
+            except genai_errors.APIError as e:
+                if e.code == 429:
                     return ("L'assistant a atteint sa limite de requêtes pour le moment. "
                             "Réessayez un peu plus tard ; les tableaux de bord restent disponibles."), True
                 return "Désolé, la réponse n'a pas pu être générée. Réessayez dans un instant.", True
+            except Exception:
+                return "Désolé, la réponse n'a pas pu être générée. Réessayez dans un instant.", True
+            if not resp.text:
+                # Réponse vide (bloquée par les filtres du modèle, par exemple) : on le dit plutôt que
+                # d'afficher une bulle vide.
+                return "L'assistant n'a pas fourni de réponse à cette question. Reformulez-la.", True
+            return resp.text, False
 
 
         # ====== CSS ======
@@ -7176,7 +7235,7 @@ else:
                 },
                 {
                     "question": "Comment les chiffres sont-ils vérifiés ?",
-                    "answer": "Le script validate_data.py contrôle chaque tableau : colonnes de même longueur, urbain + rural égal au total, somme des provinces égale à la ligne régionale, et correspondance de chaque nom de province ou de commune avec un polygone de la bonne province sur les cartes. Une erreur de saisie qui respecte tous ces totaux ne serait pas détectée."
+                    "answer": "Le script validate_data.py contrôle chaque tableau : colonnes de même longueur, urbain + rural égal au total, somme des provinces égale à la ligne régionale (au chiffre près pour les effectifs), égalité de chaque tableau répété dans l'application avec sa source dans hcpdata.py, et correspondance de chaque nom de province ou de commune avec un polygone de la bonne province sur les cartes. Deux écarts de 1 à 2 unités, présents dans les tableaux tels que saisis, sont signalés et restent à vérifier dans les annuaires. Une erreur de saisie qui respecte tous ces totaux ne serait pas détectée : ces contrôles ne remplacent pas la comparaison avec les publications."
                 },
                 {
                     "question": "Pourquoi le total régional n'apparaît-il pas dans les graphiques ?",
