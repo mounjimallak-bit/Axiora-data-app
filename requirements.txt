@@ -2,7 +2,7 @@ streamlit==1.66.1
 pandas
 plotly==5.24.1
 numpy
-google-generativeai
+google-genai
 fpdf
 Pillow
 openpyxl
