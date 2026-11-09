@@ -1,4 +1,26 @@
+"""
+Poverty analysis for the Axiora case study (Souss-Massa, 2004, 2007, 2014).
 
+Reproduces every number in the "Results" and "Population and sectors" sections of
+the case study from the tables in hcpdata.py. Nothing is typed by hand here: the
+tables are read from hcpdata.py exactly as the app and validate_data.py read them.
+
+Two levels are reported, and they answer different questions:
+  - geographic units (communes and urban centre units), each counted once: how the
+    distribution of local rates changed;
+  - territories, using the "Ensemble" rate that the HCP publishes for each province or
+    prefecture, which is weighted by population: how poverty changed for the people
+    of each territory.
+No hypothesis test or confidence interval is computed. The 179 units are the whole set
+of units with published rates, not a random sample from a larger population, and
+neighbouring units are not independent; a p-value or a resampling interval would
+describe a sampling process that did not take place.
+
+Usage:  python analyse_pauvrete.py           (prints the results)
+        python analyse_pauvrete.py --figures (also writes the two box plots to figures/)
+
+Requires pandas and numpy (and matplotlib for --figures).
+"""
 
 import ast
 import sys
