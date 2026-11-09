@@ -194,34 +194,22 @@ st.sidebar.markdown(f'''
 ''', unsafe_allow_html=True)
 st.sidebar.markdown('<h4 style="color:white; margin-top:0; margin-bottom:10px;">Menu Principal</h4>',
                     unsafe_allow_html=True)  # --- Menu principal ---
-if st.sidebar.button("▶ Accueil"):
-    go_to("Accueil")
-
-# --- Indices accordéon ---
+st.sidebar.button("▶ Accueil", on_click=go_to, args=("Accueil",))
 label = "▼ Exploration des Indices" if st.session_state.indices_open else "▶ Exploration des Indices"
 st.sidebar.button(label, key="indices_toggle", on_click=toggle_indices)
 
 if st.session_state.indices_open:
-    if st.sidebar.button("Population"):
-        go_to("Population")
-    if st.sidebar.button("Marche de Travail"):
-        go_to("Marche de Travail")
-    if st.sidebar.button("Habitat"):
-        go_to("Habitat")
-    if st.sidebar.button("Finance"):
-        go_to("Finance")
-    if st.sidebar.button("Enseignement"):
-        go_to("Enseignement")
-    if st.sidebar.button("pauvrete"):
-        go_to("pauvrete")
+    st.sidebar.button("Population", on_click=go_to, args=("Population",))
+    st.sidebar.button("Marche de Travail", on_click=go_to, args=("Marche de Travail",))
+    st.sidebar.button("Habitat", on_click=go_to, args=("Habitat",))
+    st.sidebar.button("Finance", on_click=go_to, args=("Finance",))
+    st.sidebar.button("Enseignement", on_click=go_to, args=("Enseignement",))
+    st.sidebar.button("pauvrete", on_click=go_to, args=("pauvrete",))
 
 
-if st.sidebar.button("▶ Generateur Rapport & statistiques"):
-    go_to("Generateur Rapport & statistiques")
-if st.sidebar.button("▶ assistant axiora data "):
-    go_to("assistant axiora data")
-if st.sidebar.button("▶ Aide & contact"):
-    go_to("Aide & contact")
+st.sidebar.button("▶ Generateur Rapport & statistiques", on_click=go_to, args=("Generateur Rapport & statistiques",))
+st.sidebar.button("▶ assistant axiora data ", on_click=go_to, args=("assistant axiora data",))
+st.sidebar.button("▶ Aide & contact", on_click=go_to, args=("Aide & contact",))
 
 # --- Routing ---
 if st.session_state.page == "Population":
