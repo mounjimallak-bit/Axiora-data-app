@@ -1,4 +1,22 @@
+"""
+Data checks for Axiora.
 
+Reads the hand-typed tables in hcpdata.py and the inline tables in app.py
+(parsed as literals, nothing is executed) and reports:
+
+  1. tables whose columns do not have the same number of values
+  2. totals that do not match their parts
+       - Total column vs Urbain + Rural (and Hommes/Femmes, Masculin/Féminin, Garçons/Filles)
+       - TOTAL-x column vs the sum of the other *-x columns
+       - aggregate row (Souss-Massa, Total, Ensemble...) vs the sum of the province rows
+  3. zeros in rate columns, which usually mean "missing" rather than 0 %
+  4. province names that do not reach a shape in the ADM2 shapefile after the
+     app's own name mappings, and Souss-Massa communes with the same problem
+  5. tables defined both in hcpdata.py and inline in app.py whose values differ
+
+Usage:  python validate_data.py
+Exit code is 1 when at least one error is found, so it can run in CI.
+"""
 import ast
 import re
 import struct
