@@ -77,7 +77,9 @@ def completer_au_total(df_plot, col_nom, total, col_valeur="Valeur", groupe=None
 
 def afficher_graphique(fig, *args, **kwargs):
     """Affiche un graphique Plotly avec des intitulés en français : Plotly Express nomme par défaut
-    « value » et « variable » les axes et la légende des données au format long."""
+    « value » et « variable » les axes et la légende des données au format long. Cette fonction ne
+    change que ces intitulés : elle ne retire ni ne modifie aucune donnée. Les lignes d'agrégat sont
+    retirées en amont, d'après la liste exacte LIGNES_AGREGAT."""
     renommer = {"value": "Valeur", "variable": "", "index": ""}
     fig.for_each_xaxis(lambda ax: ax.update(title_text=renommer.get(ax.title.text, ax.title.text)))
     fig.for_each_yaxis(lambda ax: ax.update(title_text=renommer.get(ax.title.text, ax.title.text)))
@@ -1368,7 +1370,7 @@ if st.session_state.page == "Population":
                 df['Année'] = year
                 records.append(df.rename(columns={'Provinces': 'Province'}))
             final_df = pd.concat(records, ignore_index=True)
-            final_df = final_df[final_df['Province'] != 'Souss-Massa'].copy()
+            final_df = final_df[~final_df['Province'].isin(LIGNES_AGREGAT)].copy()  # liste exacte, pas de motif
             final_df['Valeur'] = pd.to_numeric(final_df['Valeur'], errors='coerce')
             final_df = final_df.dropna(subset=['Valeur'])
             return final_df
@@ -3596,7 +3598,7 @@ elif st.session_state.page == "Habitat":
                 all_records.append(df_melted)
 
             final_df = pd.concat(all_records, ignore_index=True)
-            final_df = final_df[final_df['Province'] != 'Total'].copy()
+            final_df = final_df[~final_df['Province'].isin(LIGNES_AGREGAT)].copy()  # liste exacte, pas de motif
             final_df['Valeur'] = pd.to_numeric(final_df['Valeur'], errors='coerce')
             final_df = final_df.dropna(subset=['Valeur'])
             return final_df
@@ -5143,7 +5145,7 @@ elif st.session_state.page == "Enseignement":
                         province_data.append(df_melted)
 
             df_province = pd.concat(province_data, ignore_index=True)
-            df_province = df_province[~df_province['Province'].str.contains("Région|Total", regex=True)].copy()
+            df_province = df_province[~df_province['Province'].isin(LIGNES_AGREGAT)].copy()  # liste exacte, pas de motif
             df_province['Valeur'] = pd.to_numeric(df_province['Valeur'], errors='coerce').dropna()
             return df_province
 
