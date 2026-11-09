@@ -17,6 +17,7 @@ Reads the hand-typed tables in hcpdata.py and the inline tables in app.py
 Usage:  python validate_data.py
 Exit code is 1 when at least one error is found, so it can run in CI.
 """
+
 import ast
 import re
 import struct
@@ -45,6 +46,7 @@ def warn(msg):
     warnings.append(msg)
 
 
+# ---------------------------------------------------------------- loading
 def literal_tables(path):
     """Return {name: dict} for every top-level or nested `x = {...}` literal in a file."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -122,6 +124,7 @@ def iter_tables(obj, path):
             yield from iter_tables(v, f"{path}/{k}")
 
 
+# ---------------------------------------------------------------- helpers
 def is_num(x):
     return isinstance(x, (int, float)) and not isinstance(x, bool)
 
@@ -160,6 +163,7 @@ def label_column(table):
     return None
 
 
+# ---------------------------------------------------------------- checks
 def check_lengths(name, table):
     lens = {c: len(v) for c, v in table.items() if isinstance(v, list)}
     if len(set(lens.values())) > 1:
@@ -323,6 +327,8 @@ def check_duplicates(hcp, app_tables):
                     if a[prov][col] != b[prov][col]:
                         err(f"[copy] '{prov}' / '{col}' differs between hcpdata.py['{hk}'] and app.py {ak}")
 
+
+# ---------------------------------------------------------------- main
 # Tables whose "Total" column is the sum of named columns (beyond the Urbain/Rural pairs).
 COLUMN_SUMS = {
     "nombre_consommateurs_par_type_tension": ("Total", ["Basse tension", "Moyenne tension", "Haute tension"]),
