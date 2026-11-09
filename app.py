@@ -45,9 +45,10 @@ def sans_agregats(df, colonne):
 
 AUTRES_NON_AFFICHES = "Autres (non affichés)"
 ASR_SOURCE = "HCP, Annuaire statistique régional Souss-Massa"
-NOTE_ENE_2017_2018 = ("Les valeurs 2019 et 2020 correspondent aux indicateurs ENE publiés par le HCP ; "
-                      "les valeurs 2017 et 2018 n'ont pas pu être rapprochées d'un tableau publié. "
-                      "Les évolutions depuis 2017 sont donc à lire avec cette réserve.")
+NOTE_ENE_2017_2018 = ("Les valeurs 2019 et 2020 correspondent aux indicateurs ENE publiés par le HCP. Pour 2017, "
+                      "les taux d'activité par milieu (41,8 % en urbain, 45,7 % en rural) figurent dans l'annuaire "
+                      "2017 ; les autres valeurs 2017 et 2018 n'ont pas pu être rapprochées d'un tableau publié, "
+                      "et les évolutions depuis 2017 sont à lire avec cette réserve.")
 NOTE_CARTE_EFFECTIFS = ("La carte colore des valeurs absolues : une province plus peuplée ou plus étendue a "
                         "mécaniquement des valeurs plus élevées. Pour comparer des intensités, il faudrait "
                         "rapporter ces valeurs à la population.")
@@ -3918,7 +3919,7 @@ elif st.session_state.page == "Finance":
         # ================== INTERFACE ==================
         st.markdown("<h4 style='color: #607080;'>2-Répartition des projets d'investissement 2017</h4>",
                     unsafe_allow_html=True)
-        st.caption("La ligne Total diffère de 1 de la somme des provinces dans trois colonnes (12 793 emplois contre 12 794, 17 960 contre 17 959 millions de DH, 213 projets contre 212) ; écart à vérifier dans l'annuaire 2017.")
+        st.caption("Valeurs de l'annuaire 2017 : la ligne Total publiée diffère de 1 de la somme des provinces dans trois colonnes (12 793 emplois contre 12 794, 17 960 contre 17 959 millions de DH, 213 projets contre 212).")
 
         col1b, col2b, col3b = st.columns([1, 1, 3])
 
@@ -4233,13 +4234,13 @@ elif st.session_state.page == "Finance":
 
         df_pib = pd.DataFrame(data_pib)
 
-        # ============ CORRIGER LES NOMS DE COLONNES ============
+        # ============ NOMS DE COLONNES SANS ESPACES SUPERFLUS ============
         df_pib.columns = df_pib.columns.str.strip()  # Supprime les espaces en début/fin
         # df_pib.columns: ['Secteurs', 'Souss Massa 2015', 'Souss Massa 2016', 'Maroc 2015', 'Maroc 2016']
         st.markdown("<br>", unsafe_allow_html=True)
 
         st.markdown("<h4 style='color: #607080;'>6- PIB selon les secteurs d'activité</h4>", unsafe_allow_html=True)
-        st.caption("Valeur ajoutée par secteur, en millions de DH. La somme des trois secteurs n'inclut pas les impôts nets des subventions sur les produits : elle est inférieure au PIB total.")
+        st.caption("En millions de DH (annuaire 2017, tableau 9) ; 2015 : données définitives, 2016 : données semi-définitives.")
 
         col1p, col2p, col3p = st.columns([1, 3, 1])
 
@@ -4631,7 +4632,7 @@ elif st.session_state.page == "Enseignement":
             "<h4 style='color: #85919e;'>1-Nouveaux inscrits en 1ʳᵉ année selon le sexe, le milieu et les provinces/préfectures</h4>",
             unsafe_allow_html=True)
         st.caption(f"Sources : {ASR_SOURCE} 2017 et 2018, chapitre Enseignement, tableaux 6, 7 et 11.")
-        st.caption("2018, Tiznit : garçons + filles = 3 828 mais le total est 3 826 (58 641 contre 58 639 pour la région) ; les colonnes s'additionnent, l'écart vient du tableau tel que saisi et reste à vérifier dans l'annuaire 2018.")
+        st.caption("Valeurs de l'annuaire 2018 (tableau 6) : pour Tiznit, garçons + filles = 3 828 alors que le total publié est 3 826, écart que l'on retrouve dans le total régional (58 641 contre 58 639).")
 
         col1, col2, col3 = st.columns([1, 3, 1])
 
@@ -5015,7 +5016,7 @@ elif st.session_state.page == "Enseignement":
         import plotly.express as px
         import numpy as np
         import random
-        from shapely.geometry import Point  # <-- LIGNE AJOUTÉE POUR CORRIGER L'ERREUR
+        from shapely.geometry import Point
 
         # --- CONFIGURATION DE LA PAGE ---
         st.set_page_config(page_title="Axioradata - Dashboard Enseignement", layout="wide")
@@ -6518,10 +6519,9 @@ elif st.session_state.page == "assistant axiora data":
             session.append(maintenant)
             return True, 0
 
-        # SDK google-generativeai : c'est celui dont le fonctionnement a été vérifié en production. Il est
-        # déclaré obsolète par Google ; la migration vers google-genai reste à faire, avec un test réel
-        # de l'API (voir le README). Importé ici seulement : un problème avec ce paquet n'empêche pas
-        # les autres pages de fonctionner.
+        # SDK google-generativeai (Google recommande google-genai pour les nouveaux projets : voir le
+        # README). Importé ici seulement : un problème avec ce paquet n'empêche pas les autres pages
+        # de fonctionner.
         try:
             import google.generativeai as genai
         except ImportError:
@@ -6763,7 +6763,7 @@ elif st.session_state.page == "Aide & contact":
             .stTextArea > div > div > textarea {
                 font-size: 0.9rem;
             }
-            /* Correction de la couleur des labels dans la bulle */
+            /* Couleur des labels dans la bulle */
             .bulle-arrondie label {
                 color: var(--texte-bulle) !important;
             }
@@ -7263,7 +7263,7 @@ else:
                 },
                 {
                     "question": "Comment les chiffres sont-ils vérifiés ?",
-                    "answer": "Le script validate_data.py contrôle chaque tableau : colonnes de même longueur, urbain + rural égal au total, somme des provinces égale à la ligne régionale (au chiffre près pour les effectifs), égalité de chaque tableau répété dans l'application avec sa source dans hcpdata.py, et correspondance de chaque nom de province ou de commune avec un polygone de la bonne province sur les cartes. Deux écarts de 1 à 2 unités, présents dans les tableaux tels que saisis, sont signalés et restent à vérifier dans les annuaires. Une erreur de saisie qui respecte tous ces totaux ne serait pas détectée : ces contrôles ne remplacent pas la comparaison avec les publications."
+                    "answer": "Le script validate_data.py contrôle chaque tableau : colonnes de même longueur, urbain + rural égal au total, somme des provinces égale à la ligne régionale (au chiffre près pour les effectifs), égalité de chaque tableau répété dans l'application avec sa source dans hcpdata.py, et correspondance de chaque nom de province ou de commune avec un polygone de la bonne province sur les cartes. Deux écarts de 1 à 2 unités figurent dans les tableaux publiés eux-mêmes ; ils sont signalés sous les tableaux concernés. Une erreur de saisie qui respecte tous ces totaux ne serait pas détectée : ces contrôles ne remplacent pas la comparaison avec les publications."
                 },
                 {
                     "question": "Pourquoi le total régional n'apparaît-il pas dans les graphiques ?",
