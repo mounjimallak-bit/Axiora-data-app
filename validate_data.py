@@ -33,12 +33,35 @@ SOUSS_MASSA_PCODE = "MA009"
 AGGREGATE_LABELS = {"souss-massa", "souss massa", "total", "ensemble", "region", "région",
                     "t. internationa", "t.national"}
 PAIRS = [("Urbain", "Rural"), ("Hommes", "Femmes"), ("Masculin", "Féminin"), ("Garçons", "Filles")]
-TOLERANCE = 0.01  # 1 % relative, to allow for rounding in published tables
+# Sums of counts must be exact: a published table of whole numbers adds up exactly, and an error of
+# a few units (a mistyped digit) is precisely what this script is for. Only values with decimals
+# (amounts rounded to one or two decimals) get a rounding margin.
+DECIMAL_TOLERANCE = 0.05  # absolute, for values published with decimals
+
+# Discrepancies that are in the data as transcribed and whose source has not been settled. They are
+# reported as warnings, by name, instead of being hidden by a tolerance; each one must be checked
+# against the publication. Every column of these tables adds up correctly; only the rows below do not,
+# which points to the published table rather than to a typing error (a single mistyped value would
+# also break the sum of its column).
+KNOWN_DISCREPANCIES = [
+    (r"nouveaux_inscrits_annee_1/2018: Tiznit: Total|Nouveaux inscrits \(1ère année\)/2018: Tiznit: Total",
+     "Tiznit 2018: Garçons + Filles = 3 828 but Total = 3 826 (and 58 641 vs 58 639 for the region); "
+     "check the 2018 regional yearbook, Enseignement, tableau 6"),
+    (r"nouveaux_inscrits_annee_1/2018: Région Souss-Massa: Total|Nouveaux inscrits \(1ère année\)/2018: Région Souss-Massa: Total",
+     "same discrepancy, carried into the regional row"),
+    (r"(projets_investissement_2017|data_projets): row 'Total'",
+     "the Total row differs by 1 from the sum of the provinces in three columns; "
+     "check the 2017 regional yearbook, Finances"),
+]
 
 errors, warnings = [], []
 
 
 def err(msg):
+    for pattern, note in KNOWN_DISCREPANCIES:
+        if re.search(pattern, msg):
+            warnings.append(f"{msg}  [known, to check in the publication: {note}]")
+            return
     errors.append(msg)
 
 
@@ -149,7 +172,10 @@ def is_aggregate(label):
 
 
 def close(a, b):
-    return abs(a - b) <= max(1.0, TOLERANCE * max(abs(a), abs(b)))
+    """Exact for whole numbers; a small rounding margin only when a value has decimals."""
+    if float(a).is_integer() and float(b).is_integer():
+        return a == b
+    return abs(a - b) <= DECIMAL_TOLERANCE
 
 
 def strip_accents(s):
@@ -352,24 +378,59 @@ def _cells(table):
     return out
 
 
+# Copies whose structure is shared by several tables (the four housing tables have the same provinces
+# and columns): the copy is named here, since neither the structure nor the year can tell them apart.
+COPY_OF = {
+    "app.py:data_ops": "hcpdata/habitat/operations_achevees",
+    "app.py:habitat_data/Opérations achevées": "hcpdata/habitat/operations_achevees",
+    "app.py:data_ops_lancement": "hcpdata/habitat/operations_lancement",
+    "app.py:habitat_data/Opérations en lancement": "hcpdata/habitat/operations_lancement",
+    "app.py:habitat_data/Opérations en exécution": "hcpdata/habitat/operations_execution",
+    "app.py:data_ops_etude": "hcpdata/habitat/operations_etude",
+    "app.py:habitat_data/Opérations en étude": "hcpdata/habitat/operations_etude",
+}
+
+
+def _years(name):
+    return set(re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", name))
+
+
 def check_all_copies(tables):
     """Every table of app.py that is a copy of a table of hcpdata.py must have the same values.
-    A copy is the hcpdata table with the most equal (row, column) cells; it must share at least half
-    of the cells of the app table, otherwise the app table is reported as having no copy."""
+
+    The copy is chosen by structure only, never by the values (choosing the candidate whose values
+    already agree would hide an error such as a 2018 table filled with the 2017 figures):
+      1. when the app table's path names a year, only hcpdata tables whose path names the same year
+         are candidates;
+      2. among them, the copy is the one sharing the most (row, column) cells; it must share at least
+         half of the app table's cells, and a tie between two candidates is reported, not guessed;
+      3. tables that share one structure (the housing tables) are paired by name in COPY_OF."""
     hcp = [(n, _cells(t)) for n, t in tables if n.startswith("hcpdata")]
     app = [(n, _cells(t)) for n, t in tables if n.startswith("app.py")]
     n_copies = 0
     for an, ac in app:
         if not ac:
             continue
-        # The copy is the candidate with the most equal cells (tables split by year share their
-        # rows and columns), then the most shared cells.
-        best = max(hcp, key=lambda h: (sum(ac[k] == h[1][k] for k in ac.keys() & h[1].keys()),
-                                       len(ac.keys() & h[1].keys())), default=None)
-        common = ac.keys() & best[1].keys() if best else set()
-        if len(common) < len(ac) / 2:
+        years = _years(an)
+        if an in COPY_OF:
+            candidates = [h for h in hcp if h[0] == COPY_OF[an]]
+            if not candidates:
+                err(f"[copy] {an}: COPY_OF names {COPY_OF[an]}, which is not a table of hcpdata.py")
+                continue
+        else:
+            candidates = [h for h in hcp if not years or years <= _years(h[0])] or hcp
+        overlap = {h[0]: len(ac.keys() & h[1].keys()) for h in candidates}
+        top = max(overlap.values(), default=0)
+        best_all = [h for h in candidates if overlap[h[0]] == top]
+        if top < len(ac) / 2:
             warn(f"[copy] {an}: no copy found in hcpdata.py, so the assistant does not see this table")
             continue
+        if len(best_all) > 1:
+            err(f"[copy] {an}: several hcpdata.py tables have the same structure "
+                f"({', '.join(h[0] for h in best_all)}); name the year in both paths")
+            continue
+        best = best_all[0]
+        common = ac.keys() & best[1].keys()
         n_copies += 1
         for k in sorted(common):
             if ac[k] != best[1][k]:
@@ -380,6 +441,7 @@ def check_all_copies(tables):
 # ---------------------------------------------------------------- main
 # Tables whose "Total" column is the sum of named columns (beyond the Urbain/Rural pairs).
 COLUMN_SUMS = {
+    "division_administrative": ("Total Communes", ["Urbaines", "Rurales"]),
     "nombre_consommateurs_par_type_tension": ("Total", ["Basse tension", "Moyenne tension", "Haute tension"]),
     "eleves_primaire_public_par_niveau": ("Total", ["1ère", "2ème", "3ème", "4ème", "5ème", "6ème"]),
     "Élèves par classe": ("Total", ["1ère", "2ème", "3ème", "4ème", "5ème", "6ème"]),
