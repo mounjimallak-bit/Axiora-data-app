@@ -202,9 +202,13 @@ des indicateurs de pauvreté 2004, 2007 et 2014*, and the RGPH 2014 results. Eve
 value of the tables taken from the 2016, 2017 and 2018 regional yearbooks was
 compared with the yearbook text; this found and corrected two transcription
 errors (four cells of the 2017 administrative division, and the 2015 column of
-the companies-created table, whose three values had been swapped). The three labour-market tables for 2017–2020 were taken from the
-regional results of the ENE survey and were not checked cell by cell against a
-single published table. The internal totals (province rows against the regional
+the companies-created table, whose three values had been swapped).
+In the three labour-market tables for 2017–2020 (ENE
+survey), the 2019 and 2020 values match the HCP's published ENE indicators and the
+2019–2020 yearbooks; the 2017 and 2018 values, and the rates for people with a
+diploma (published by the HCP split into two levels), could not be matched to a
+published table.
+The internal totals (province rows against the regional
 row, Urbain + Rural, subtotals against their parts) are enforced by
 `validate_data.py`.
 
