@@ -323,10 +323,10 @@ if st.session_state.page == "Population":
     # --- Données par année ---
     data_2017 = {
         "Province": ["Agadir Ida Outanane", "Inezgane-Aït Melloul", "Chtouka-Aït Baha", "Taroudant", "Tiznit", "Tata"],
-        "Urbaines": [1, 2, 2, 8, 2, 4],
-        "Rurales": [11, 4, 20, 81, 23, 16],
-        "Total Communes": [12, 6, 22, 89, 25, 20],
-        "Cercles": [1, 1, 2, 5, 3, 3]
+        "Urbaines": [1, 4, 2, 8, 2, 4],
+        "Rurales": [12, 2, 20, 81, 23, 16],
+        "Total Communes": [13, 6, 22, 89, 25, 20],
+        "Cercles": [1, 1, 3, 5, 3, 3]
     }
 
     data_2018 = {
@@ -445,7 +445,7 @@ if st.session_state.page == "Population":
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("""
 
-                        Les changements sont plus visibles sur les communes urbaines et le nombre de cercles.
+                        Le découpage en communes est identique les deux années ; seul le nombre de cercles change : la préfecture d'Agadir Ida Outanane passe de 1 à 2 cercles (16 à 17 pour la région).
                         """)
 
         # --- Col3 : options ---
@@ -1247,8 +1247,8 @@ if st.session_state.page == "Population":
                     "Province": ["Agadir Ida Outanane", "Inezgane-Aït Melloul", "Chtouka-Aït Baha", "Taroudant",
                                  "Tiznit",
                                  "Tata"],
-                    "Urbaines": [1, 2, 2, 8, 2, 4], "Rurales": [11, 4, 20, 81, 23, 16],
-                    "Total Communes": [12, 6, 22, 89, 25, 20], "Cercles": [1, 1, 2, 5, 3, 3]
+                    "Urbaines": [1, 4, 2, 8, 2, 4], "Rurales": [12, 2, 20, 81, 23, 16],
+                    "Total Communes": [13, 6, 22, 89, 25, 20], "Cercles": [1, 1, 3, 5, 3, 3]
                 },
                 "2018": {
                     "Province": ["Agadir Ida Outanane", "Inezgane Ait Melloul", "Chtouka Ait Baha", "Taroudant",
@@ -3063,10 +3063,10 @@ elif st.session_state.page == "Habitat":
             "Nbre d'unités": [9439, 1063, 295, 261, 4279, None, 15337],
             "Superficie (En Ha)": [283, 35, 427, 1, 986, None, 1732],
             "Lotissements": [589, 100, 0, 0, 0, None, 689],
-            "Logements": [0, 0, 0, 0, 0, None, 0],
+            "Logements (recasement)": [0, 0, 0, 0, 0, None, 0],
             "Restructuration": [7063, 0, 295, 0, 4213, None, 11571],
             "Lots de terrain": [21, 737, 0, 0, 0, None, 758],
-            "Logements (2e colonne)": [1693, 216, 0, 261, 62, None, 2232],
+            "Logements (autres unités)": [1693, 216, 0, 261, 62, None, 2232],
             "Activités et Zones Industrielles": [73, 10, 0, 0, 4, None, 87],
             "Cout en Millions de DH": [588, 285, 2, 36, 60, None, 971]
         }
@@ -3146,10 +3146,10 @@ elif st.session_state.page == "Habitat":
             "Nbre d'unités": [9817, 583, 2469, 12869],
             "Superficie (En Ha)": [334, 2, 383, 719],
             "Lotissements": [0, 0, 0, 0],
-            "Logements": [0, 0, 0, 0],
+            "Logements (recasement)": [0, 0, 0, 0],
             "Restructuration": [7395, 0, 2469, 9864],
             "Lots de terrain": [0, 0, 0, 0],
-            "Logements (2e colonne)": [679, 533, 0, 1212],
+            "Logements (autres unités)": [679, 533, 0, 1212],
             "Activités et Zones Industrielles": [1743, 50, 0, 1793],
             "Cout en Millions de DH": [385, 104, 25, 514]
         }
@@ -3241,10 +3241,10 @@ elif st.session_state.page == "Habitat":
             "Nbre d'unités": [6662, 3283, 5841, 2050, 797, None],
             "Superficie (En Ha)": [60, 42, 330, 143, 64, None],
             "Lotissements": [985, 744, 24, 0, 0, None],
-            "Logements": [0, 0, 210, 0, 0, None],
+            "Logements (recasement)": [0, 0, 210, 0, 0, None],
             "Restructuration": [500, 0, 150, 0, 672, None],
             "Lots de terrain": [25, 994, 4800, 850, 0, None],
-            "Logements (2e colonne)": [4416, 1228, 100, 96, 111, None],
+            "Logements (autres unités)": [4416, 1228, 100, 96, 111, None],
             "Activités et Zones Industrielles": [736, 317, 557, 1104, 14, None],
             "Cout en Millions de DH": [2121, 517, 973, 475, 38, None]
         })
@@ -3331,10 +3331,10 @@ elif st.session_state.page == "Habitat":
             "Nbre d'unités": [29568, 722, 457, 400, 300, None, 31447],
             "Superficie (En Ha)": [1019, 3, 4, 6, 1, None, 1033],
             "Lotissements": [0, 0, 0, 0, 0, None, 0],
-            "Logements": [0, 0, 0, 400, 0, None, 400],
+            "Logements (recasement)": [0, 0, 0, 400, 0, None, 400],
             "Restructuration": [0, 0, 0, 0, 0, None, 0],
             "Lots de terrain": [25204, 0, 117, 0, 0, None, 25321],
-            "Logements (2e colonne)": [4364, 500, 340, 0, 300, None, 5504],
+            "Logements (autres unités)": [4364, 500, 340, 0, 300, None, 5504],
             "Activités et Zones Industrielles": [0, 222, 0, 0, 0, None, 222],
             "Cout en Millions de DH": [5815, 110, 77, 40, 55, None, 6097]
         }
@@ -3442,10 +3442,10 @@ elif st.session_state.page == "Habitat":
                 "Nbre d'unités": [9439, 1063, 295, 261, 4279, None, 15337],
                 "Superficie (En Ha)": [283, 35, 427, 1, 986, None, 1732],
                 "Lotissements": [589, 100, 0, 0, 0, None, 689],
-                "Logements": [0, 0, 0, 0, 0, None, 0],
+                "Logements (recasement)": [0, 0, 0, 0, 0, None, 0],
                 "Restructuration": [7063, 0, 295, 0, 4213, None, 11571],
                 "Lots de terrain": [21, 737, 0, 0, 0, None, 758],
-                "Logements (2e colonne)": [1693, 216, 0, 261, 62, None, 2232],
+                "Logements (autres unités)": [1693, 216, 0, 261, 62, None, 2232],
                 "Activités et Zones Industrielles": [73, 10, 0, 0, 4, None, 87],
                 "Cout en Millions de DH": [588, 285, 2, 36, 60, None, 971]
             },
@@ -3454,10 +3454,10 @@ elif st.session_state.page == "Habitat":
                 "Nbre d'unités": [9817, 583, 2469, 12869],
                 "Superficie (En Ha)": [334, 2, 383, 719],
                 "Lotissements": [0, 0, 0, 0],
-                "Logements": [0, 0, 0, 0],
+                "Logements (recasement)": [0, 0, 0, 0],
                 "Restructuration": [7395, 0, 2469, 9864],
                 "Lots de terrain": [0, 0, 0, 0],
-                "Logements (2e colonne)": [679, 533, 0, 1212],
+                "Logements (autres unités)": [679, 533, 0, 1212],
                 "Activités et Zones Industrielles": [1743, 50, 0, 1793],
                 "Cout en Millions de DH": [385, 104, 25, 514]
             },
@@ -3467,10 +3467,10 @@ elif st.session_state.page == "Habitat":
                 "Nbre d'unités": [6662, 3283, 5841, 2050, 797, None],
                 "Superficie (En Ha)": [60, 42, 330, 143, 64, None],
                 "Lotissements": [985, 744, 24, 0, 0, None],
-                "Logements": [0, 0, 210, 0, 0, None],
+                "Logements (recasement)": [0, 0, 210, 0, 0, None],
                 "Restructuration": [500, 0, 150, 0, 672, None],
                 "Lots de terrain": [25, 994, 4800, 850, 0, None],
-                "Logements (2e colonne)": [4416, 1228, 100, 96, 111, None],
+                "Logements (autres unités)": [4416, 1228, 100, 96, 111, None],
                 "Activités et Zones Industrielles": [736, 317, 557, 1104, 14, None],
                 "Cout en Millions de DH": [2121, 517, 973, 475, 38, None]
             },
@@ -3481,10 +3481,10 @@ elif st.session_state.page == "Habitat":
                 "Nbre d'unités": [29568, 722, 457, 400, 300, None, 31447],
                 "Superficie (En Ha)": [1019, 3, 4, 6, 1, None, 1033],
                 "Lotissements": [0, 0, 0, 0, 0, None, 0],
-                "Logements": [0, 0, 0, 400, 0, None, 400],
+                "Logements (recasement)": [0, 0, 0, 400, 0, None, 400],
                 "Restructuration": [0, 0, 0, 0, 0, None, 0],
                 "Lots de terrain": [25204, 0, 117, 0, 0, None, 25321],
-                "Logements (2e colonne)": [4364, 500, 340, 0, 300, None, 5504],
+                "Logements (autres unités)": [4364, 500, 340, 0, 300, None, 5504],
                 "Activités et Zones Industrielles": [0, 222, 0, 0, 0, None, 222],
                 "Cout en Millions de DH": [5815, 110, 77, 40, 55, None, 6097]
             }
@@ -3992,9 +3992,9 @@ elif st.session_state.page == "Finance":
 
         data_entreprises = {
             "Année": ["2017", "2016", "2015"],
-            "Nombre d’emplois ": [3549, 2718, 1087],
-            "Montant d’investissement (Mdhs) ": [360, 323, 4293],
-            "Nombre de projets ": [684, 572, 562]
+            "Nombre d’emplois ": [3549, 2718, 4293],
+            "Montant d’investissement (Mdhs) ": [360, 323, 562],
+            "Nombre de projets ": [684, 572, 1087]
         }
 
         df_entreprises = pd.DataFrame(data_entreprises).sort_values("Année").reset_index(drop=True)
@@ -4536,7 +4536,9 @@ elif st.session_state.page == "Enseignement":
         df_2017, df_2018 = sans_agregats(df_2017, "Province"), sans_agregats(df_2018, "Province")  # données tracées
 
         # Fusion des 2 années
-        df_all = pd.merge(df_2017, df_2018, on="Province")
+        df_all = pd.merge(df_2017, df_2018, on="Province", validate="one_to_one")
+        if len(df_all) != len(df_2017):
+            raise ValueError("Une province de 2017 n'a pas de correspondance en 2018")
 
         # ================== Interface ==================
 
@@ -4593,7 +4595,7 @@ elif st.session_state.page == "Enseignement":
         st.markdown("""
                 <div style='background-color: #aab5bf; border-radius: 12px; padding: 8px 16px;
                  text-align: center; color: white; font-weight: bold; font-size: 18px; display: inline-block;'>
-                Analyse Comparative par statut professionnel et milieu
+                Comparaison 2017 – 2018
                 </div>
                 """, unsafe_allow_html=True)
         col1c, col2c, col3c = st.columns([1, 1, 3])
@@ -4649,16 +4651,16 @@ elif st.session_state.page == "Enseignement":
         data_2017 = {
             "Province": ["Agadir Ida Outanane", "Inezgane Ait Melloul", "Chtouka Ait Baha",
                          "Taroudant", "Tiznit", "Tata", "Total"],
-            "Garçons 2017": [769, 773, 1303, 3185, 837, 509, 7376],
-            "Filles 2017": [1022, 874, 619, 2073, 385, 310, 5283],
+            "Hommes 2017": [769, 773, 1303, 3185, 837, 509, 7376],
+            "Femmes 2017": [1022, 874, 619, 2073, 385, 310, 5283],
             "Total 2017": [1791, 1647, 1922, 5258, 1222, 819, 12659]
         }
 
         data_2018 = {
             "Province": ["Agadir Ida Outanane", "Inezgane Ait Melloul", "Chtouka Ait Baha",
                          "Taroudant", "Tiznit", "Tata", "Total région Souss-Massa"],
-            "Garçons 2018": [816, 830, 1334, 3048, 890, 494, 7412],
-            "Filles 2018": [1101, 942, 728, 2137, 411, 339, 5658],
+            "Hommes 2018": [816, 830, 1334, 3048, 890, 494, 7412],
+            "Femmes 2018": [1101, 942, 728, 2137, 411, 339, 5658],
             "Total 2018": [1917, 1772, 2062, 5185, 1301, 833, 13070]
         }
 
@@ -4668,7 +4670,9 @@ elif st.session_state.page == "Enseignement":
         df_2017, df_2018 = sans_agregats(df_2017, "Province"), sans_agregats(df_2018, "Province")  # données tracées
 
         # Fusion des 2 années
-        df_all = pd.merge(df_2017, df_2018, on="Province")
+        df_all = pd.merge(df_2017, df_2018, on="Province", validate="one_to_one")
+        if len(df_all) != len(df_2017):
+            raise ValueError("Une province de 2017 n'a pas de correspondance en 2018")
 
         # ================== Interface ==================
 
@@ -4683,8 +4687,8 @@ elif st.session_state.page == "Enseignement":
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             year = st.radio("Choisir une année :", ["2017", "2018"], index=1, key="radio_year_1")
 
-            show_boys = st.checkbox("Afficher Garçons", True, key="chk11")
-            show_girls = st.checkbox("Afficher Filles", True, key="chk12")
+            show_boys = st.checkbox("Afficher Hommes", True, key="chk11")
+            show_girls = st.checkbox("Afficher Femmes", True, key="chk12")
             show_total = st.checkbox("Afficher Total", True, key="chk13")
 
             # --- nouveau : choix du type de graphe ---
@@ -4694,14 +4698,14 @@ elif st.session_state.page == "Enseignement":
             if year == "2017":
                 df_plot = df_2017.copy()
                 cols = []
-                if show_boys: cols.append("Garçons 2017")
-                if show_girls: cols.append("Filles 2017")
+                if show_boys: cols.append("Hommes 2017")
+                if show_girls: cols.append("Femmes 2017")
                 if show_total: cols.append("Total 2017")
             else:
                 df_plot = df_2018.copy()
                 cols = []
-                if show_boys: cols.append("Garçons 2018")
-                if show_girls: cols.append("Filles 2018")
+                if show_boys: cols.append("Hommes 2018")
+                if show_girls: cols.append("Femmes 2018")
                 if show_total: cols.append("Total 2018")
 
             if cols:
@@ -4728,7 +4732,7 @@ elif st.session_state.page == "Enseignement":
         st.markdown("""
                         <div style='background-color: #aab5bf; border-radius: 12px; padding: 8px 16px;
                          text-align: center; color: white; font-weight: bold; font-size: 18px; display: inline-block;'>
-                        Analyse Comparative par statut professionnel et milieu
+                        Comparaison 2017 – 2018
                         </div>
                         """, unsafe_allow_html=True)
 
@@ -4740,13 +4744,13 @@ elif st.session_state.page == "Enseignement":
             st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("""Le total régional augmente légèrement.""")
             st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("""Les écarts entre garçons et filles persistent mais restent modérés.""")
+            st.markdown("""Les hommes forment 57 % du personnel enseignant en 2018 (7 412 sur 13 070) ; les femmes sont majoritaires à Agadir Ida Outanane et à Inezgane Aït Melloul.""")
 
         with col2c:
             st.markdown("<br><br><br><br><br>", unsafe_allow_html=True)
 
-            compare_boys = st.checkbox("Comparer Garçons", True, key="comp_boys1")
-            compare_girls = st.checkbox("Comparer Filles", True, key="comp_girls2")
+            compare_boys = st.checkbox("Comparer Hommes", True, key="comp_boys1")
+            compare_girls = st.checkbox("Comparer Femmes", True, key="comp_girls2")
             compare_total = st.checkbox("Comparer Total", True, key="comp_total3")
 
             # --- nouveau : choix type de graphe comparaison ---
@@ -4756,8 +4760,8 @@ elif st.session_state.page == "Enseignement":
         with col3c:
             df_compare = df_all.copy()
             cols_compare = []
-            if compare_boys: cols_compare += ["Garçons 2017", "Garçons 2018"]
-            if compare_girls: cols_compare += ["Filles 2017", "Filles 2018"]
+            if compare_boys: cols_compare += ["Hommes 2017", "Hommes 2018"]
+            if compare_girls: cols_compare += ["Femmes 2017", "Femmes 2018"]
             if compare_total: cols_compare += ["Total 2017", "Total 2018"]
 
             if cols_compare:
@@ -4807,7 +4811,12 @@ elif st.session_state.page == "Enseignement":
         df_2017, df_2018 = sans_agregats(df_2017, "Province"), sans_agregats(df_2018, "Province")  # données tracées
 
         # Fusion des deux années
-        df_all = pd.merge(df_2017, df_2018, left_on="Province", right_on="Province", suffixes=("_2017", "_2018"))
+        df_2018["Province"] = df_2018["Province"].replace({"Agadir Idaoutanane": "Agadir Ida Outanane",
+                                                           "Inezgane Ait Melloul": "Inezgane Aït Melloul",
+                                                           "Chtouka Ait Baha": "Chtouka Aït Baha"})
+        df_all = pd.merge(df_2017, df_2018, on="Province", suffixes=("_2017", "_2018"), validate="one_to_one")
+        if len(df_all) != len(df_2017):
+            raise ValueError("Élèves du primaire : une province de 2017 n'a pas de correspondance en 2018")
 
         # ================== Interface ==================
 
@@ -4861,7 +4870,7 @@ elif st.session_state.page == "Enseignement":
         st.markdown("""
                         <div style='background-color: #aab5bf; border-radius: 12px; padding: 8px 16px;
                          text-align: center; color: white; font-weight: bold; font-size: 18px; display: inline-block;'>
-                        Analyse Comparative par statut professionnel et milieu
+                        Comparaison 2017 – 2018
                         </div>
                         """, unsafe_allow_html=True)
 
@@ -6693,7 +6702,7 @@ else:
                 text-align: justify;
             ">
             Axiora Data rassemble des tableaux publiés par la direction régionale du Haut-Commissariat au Plan (HCP) pour la région Souss-Massa : annuaires statistiques régionaux 2017 et 2018, recensements (RGPH) 2004 et 2014, enquête nationale sur l’emploi et carte communale de la pauvreté 2014.<br><br>
-            Les tableaux ont été saisis à la main, avec leur source, puis contrôlés par un script (<b>validate_data.py</b>) : totaux urbain + rural, somme des provinces contre la ligne régionale, correspondance de chaque nom avec un polygone des cartes.<br><br>
+            Les tableaux ont été saisis à la main, avec leur source, puis contrôlés par un script (validate_data.py) : totaux urbain + rural, somme des provinces contre la ligne régionale, correspondance de chaque nom avec un polygone des cartes.<br><br>
             Chaque thème se lit par province (ou par commune pour la pauvreté), sur une carte et dans des graphiques dont les lignes d’agrégat (total régional, ensemble) sont exclues pour ne pas être comparées aux territoires qu’elles additionnent.
             </div>
             """, unsafe_allow_html=True)
