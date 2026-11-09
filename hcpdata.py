@@ -42,8 +42,6 @@ SOURCES = {
 #   Filles 1 905 and Total 3 826 (regional total 58 639): kept as published.
 #   finance/projets_investissement_2017, Total row: the 2017 yearbook prints 12 793 jobs, 17 960 million DH
 #   and 213 projects, 1 away from the sum of the provinces: kept as published.
-#   population/population_legale, Chtouka-Aït Baha, urbain 2004: 39 694, the value with which the
-#   provinces add up to the published regional total (no HCP sheet gives this figure directly).
 
 hcp_data = {
     "pauvrete": {
