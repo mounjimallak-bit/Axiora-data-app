@@ -45,6 +45,12 @@ def sans_agregats(df, colonne):
 
 AUTRES_NON_AFFICHES = "Autres (non affichés)"
 ASR_SOURCE = "HCP, Annuaire statistique régional Souss-Massa"
+NOTE_ENE_2017_2018 = ("Les valeurs 2019 et 2020 correspondent aux indicateurs ENE publiés par le HCP ; "
+                      "les valeurs 2017 et 2018 n'ont pas pu être rapprochées d'un tableau publié. "
+                      "Les évolutions depuis 2017 sont donc à lire avec cette réserve.")
+NOTE_CARTE_EFFECTIFS = ("La carte colore des valeurs absolues : une province plus peuplée ou plus étendue a "
+                        "mécaniquement des valeurs plus élevées. Pour comparer des intensités, il faudrait "
+                        "rapporter ces valeurs à la population.")
 
 # Seule valeur des tables qui n'est pas lue dans une publication (voir le README) : elle est signalée
 # partout où elle est affichée.
@@ -1429,6 +1435,7 @@ if st.session_state.page == "Population":
                     fig_map.update_traces(marker_line_width=1.5, marker_line_color='white')
                     fig_map.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0})
                     st.plotly_chart(fig_map, width="stretch")
+                    st.caption(NOTE_CARTE_EFFECTIFS)
                 with col2_viz:
                     df_sorted = merged_gdf.sort_values(by="Valeur", ascending=True)
                     fig_bar = px.bar(df_sorted, x="Valeur", y='Province', orientation='h', text_auto='.2s',
@@ -1522,6 +1529,7 @@ elif st.session_state.page == "Marche de Travail":
                                                        1. Activité par âge et milieu (2017–2020) </h4>
                                           """, unsafe_allow_html=True)
         st.caption(f"Sources : sections 1 à 3, HCP, Enquête nationale sur l'emploi 2017 à 2020, résultats régionaux ; sections 4 à 10, {ASR_SOURCE} 2016, chapitre Emploi (ENE 2016).")
+        st.caption(NOTE_ENE_2017_2018)
         data = {
             "Âge": ["15-24", "25-34", "35-44", "45 et plus", "Total"],
             "2017-Urbain": [16.4, 55.8, 56.3, 39.8, 41.8],
@@ -1652,6 +1660,7 @@ elif st.session_state.page == "Marche de Travail":
         2-Évolution du taux d'activité par niveau d'instruction et milieu (2017–2020)
         </h4>
         """, unsafe_allow_html=True)
+        st.caption(NOTE_ENE_2017_2018)
 
         # ================== Données ==================
         data_evolution = {
@@ -1799,6 +1808,7 @@ elif st.session_state.page == "Marche de Travail":
         3-Évolution du taux d'emploi par sexe et milieu (2017–2020)
         </h4>
         """, unsafe_allow_html=True)
+        st.caption(NOTE_ENE_2017_2018)
 
         # ================== Données ==================
         data_emploi = {
@@ -3641,6 +3651,7 @@ elif st.session_state.page == "Habitat":
                     )
                     fig_map.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0}, height=600)
                     st.plotly_chart(fig_map, width="stretch")
+                    st.caption(NOTE_CARTE_EFFECTIFS)
                     absentes = sorted(set(gdf_provinces.loc[gdf_provinces["ADM1_PCODE"] == "MA009", "ADM2_FR"])
                                       - set(gdf_merged["ADM2_FR"]))
                     if absentes:
@@ -3907,6 +3918,7 @@ elif st.session_state.page == "Finance":
         # ================== INTERFACE ==================
         st.markdown("<h4 style='color: #607080;'>2-Répartition des projets d'investissement 2017</h4>",
                     unsafe_allow_html=True)
+        st.caption("La ligne Total diffère de 1 de la somme des provinces dans trois colonnes (12 793 emplois contre 12 794, 17 960 contre 17 959 millions de DH, 213 projets contre 212) ; écart à vérifier dans l'annuaire 2017.")
 
         col1b, col2b, col3b = st.columns([1, 1, 3])
 
@@ -4227,6 +4239,7 @@ elif st.session_state.page == "Finance":
         st.markdown("<br>", unsafe_allow_html=True)
 
         st.markdown("<h4 style='color: #607080;'>6- PIB selon les secteurs d'activité</h4>", unsafe_allow_html=True)
+        st.caption("Valeur ajoutée par secteur, en millions de DH. La somme des trois secteurs n'inclut pas les impôts nets des subventions sur les produits : elle est inférieure au PIB total.")
 
         col1p, col2p, col3p = st.columns([1, 3, 1])
 
@@ -4497,6 +4510,7 @@ elif st.session_state.page == "Finance":
                     fig_map.update_traces(marker_line_width=1.5, marker_line_color='white')
                     fig_map.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0})
                     st.plotly_chart(fig_map, width="stretch")
+                    st.caption(NOTE_CARTE_EFFECTIFS)
                 with col2_viz:
                     df_sorted = merged_gdf.sort_values(by="Valeur", ascending=True)
                     fig_bar = px.bar(df_sorted, x="Valeur", y='Province', orientation='h', text_auto='.2s',
@@ -4617,6 +4631,7 @@ elif st.session_state.page == "Enseignement":
             "<h4 style='color: #85919e;'>1-Nouveaux inscrits en 1ʳᵉ année selon le sexe, le milieu et les provinces/préfectures</h4>",
             unsafe_allow_html=True)
         st.caption(f"Sources : {ASR_SOURCE} 2017 et 2018, chapitre Enseignement, tableaux 6, 7 et 11.")
+        st.caption("2018, Tiznit : garçons + filles = 3 828 mais le total est 3 826 (58 641 contre 58 639 pour la région) ; les colonnes s'additionnent, l'écart vient du tableau tel que saisi et reste à vérifier dans l'annuaire 2018.")
 
         col1, col2, col3 = st.columns([1, 3, 1])
 
@@ -5214,6 +5229,8 @@ elif st.session_state.page == "Enseignement":
 
                     fig_map.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0}, height=600, legend_title_text='')
                     st.plotly_chart(fig_map, width="stretch")
+                    if not is_gendered_theme:  # la carte à points représente, elle, des effectifs par construction
+                        st.caption(NOTE_CARTE_EFFECTIFS)
                     if is_gendered_theme:
                         st.caption(f"1 point = {POINTS_SCALE_FACTOR} personnes (arrondi à l'inférieur). Les points "
                                    "sont placés au hasard dans la province : leur position ne représente pas "
@@ -5798,12 +5815,12 @@ elif st.session_state.page == "Generateur Rapport & statistiques":
         def describe_table_str(series: pd.Series) -> str:
             d = series.describe()
             lines = []
-            names = {"count": "effectif", "mean": "moyenne", "std": "écart-type", "min": "minimum",
+            names = {"count": "effectif", "mean": "moyenne", "std": "écart-type (n-1)", "min": "minimum",
                      "25%": "1er quartile", "50%": "médiane", "75%": "3e quartile", "max": "maximum"}
             for k in ["count", "mean", "std", "min", "25%", "50%", "75%", "max"]:
                 if k in d.index:
                     v = f"{int(d[k])}" if k == "count" else fmt_num(d[k])
-                    lines.append(f"{names[k]:>13} : {v}")
+                    lines.append(f"{names[k]:>16} : {v}")
             return "\n".join(lines)
 
         def group_summary_table(df_clean: pd.DataFrame) -> pd.DataFrame:
@@ -5979,7 +5996,7 @@ elif st.session_state.page == "Generateur Rapport & statistiques":
                 f"Données analysées : {n_rows} ligne(s), {n_groups} groupe(s), {n_items} élément(s).\n"
                 f"Max : {max_row['Item']} ({max_row['Group']}) = {fmt_num(max_row['Value'])} | "
                 f"Min : {min_row['Item']} ({min_row['Group']}) = {fmt_num(min_row['Value'])}\n"
-                f"Moyenne : {fmt_num(mean_val)} | Écart-type : {fmt_num(std_val)} | Écart max-min : {fmt_num(gap)}\n"
+                f"Moyenne : {fmt_num(mean_val)} | Écart-type (n-1) : {fmt_num(std_val)} | Écart max-min : {fmt_num(gap)}\n"
                 f"Groupe à la moyenne la plus élevée : {best_group}"
             )
 
