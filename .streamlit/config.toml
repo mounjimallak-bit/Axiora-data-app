@@ -1,0 +1,5 @@
+[server]
+# Taille maximale d'un fichier importé dans le générateur de rapports, en Mo (200 par défaut).
+# Un classeur de tableaux statistiques pèse rarement plus de quelques Mo ; la limite évite qu'un
+# fichier très lourd sature la mémoire de l'application partagée.
+maxUploadSize = 10
