@@ -328,6 +328,55 @@ def check_duplicates(hcp, app_tables):
                         err(f"[copy] '{prov}' / '{col}' differs between hcpdata.py['{hk}'] and app.py {ak}")
 
 
+def _cells(table):
+    """{(row label, column): number} with labels and column names normalised (accents, case,
+    punctuation, a trailing year, Garçons/Filles -> Hommes/Femmes), so that two copies of one
+    published table can be matched even when they are laid out slightly differently."""
+    lab = label_column(table)
+    if not lab:
+        return {}
+
+    def norm(x):
+        x = strip_accents(str(x)).lower()
+        x = re.sub(r"\s\d{4}$", "", x.strip())
+        x = x.replace("garcons", "hommes").replace("filles", "femmes")
+        return re.sub(r"[^a-z0-9]+", " ", x).strip()
+
+    out = {}
+    for col, values in table.items():
+        if col == lab or not isinstance(values, list) or len(values) != len(table[lab]):
+            continue
+        for row, v in zip(table[lab], values):
+            if is_num(v):
+                out[(norm(row), norm(col))] = v
+    return out
+
+
+def check_all_copies(tables):
+    """Every table of app.py that is a copy of a table of hcpdata.py must have the same values.
+    A copy is the hcpdata table with the most equal (row, column) cells; it must share at least half
+    of the cells of the app table, otherwise the app table is reported as having no copy."""
+    hcp = [(n, _cells(t)) for n, t in tables if n.startswith("hcpdata")]
+    app = [(n, _cells(t)) for n, t in tables if n.startswith("app.py")]
+    n_copies = 0
+    for an, ac in app:
+        if not ac:
+            continue
+        # The copy is the candidate with the most equal cells (tables split by year share their
+        # rows and columns), then the most shared cells.
+        best = max(hcp, key=lambda h: (sum(ac[k] == h[1][k] for k in ac.keys() & h[1].keys()),
+                                       len(ac.keys() & h[1].keys())), default=None)
+        common = ac.keys() & best[1].keys() if best else set()
+        if len(common) < len(ac) / 2:
+            warn(f"[copy] {an}: no copy found in hcpdata.py, so the assistant does not see this table")
+            continue
+        n_copies += 1
+        for k in sorted(common):
+            if ac[k] != best[1][k]:
+                err(f"[copy] {an} row '{k[0]}' column '{k[1]}' = {ac[k]} but {best[0]} has {best[1][k]}")
+    return n_copies
+
+
 # ---------------------------------------------------------------- main
 # Tables whose "Total" column is the sum of named columns (beyond the Urbain/Rural pairs).
 COLUMN_SUMS = {
@@ -375,8 +424,11 @@ def main():
     check_province_names(ROOT / "app.py", tables)
     check_commune_names(ROOT / "app.py")
     check_duplicates(hcp, app)
+    n_copies = check_all_copies(tables)
 
-    print(f"{len(tables)} tables checked\n")
+    n_hcp = sum(n.startswith("hcpdata") for n, _ in tables)
+    print(f"{len(tables)} tables checked: {n_hcp} in hcpdata.py, {len(tables) - n_hcp} in app.py "
+          f"({n_copies} of them copies of an hcpdata.py table, compared value by value)\n")
     for title, items in (("ERRORS", errors), ("WARNINGS", warnings)):
         print(f"{title} ({len(items)})")
         for m in items:
