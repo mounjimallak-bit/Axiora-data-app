@@ -48,7 +48,10 @@ ASR_SOURCE = "HCP, Annuaire statistique régional Souss-Massa"
 NOTE_ENE_2017_2018 = ("Les valeurs 2019 et 2020 correspondent aux indicateurs ENE publiés par le HCP, sauf les "
                       "taux des diplômés, que le HCP publie en deux niveaux. Pour 2017, "
                       "les taux d'activité par milieu (41,8 % en urbain, 45,7 % en rural) figurent dans l'annuaire "
-                      "2017 ; les autres valeurs 2017 et 2018 n'ont pas pu être rapprochées d'un tableau publié, "
+                      "2017, et les taux d'emploi par sexe et d'activité par diplôme de la région dans l'annuaire "
+                      "2018 (tableaux 4 et 7, ENE 2017). Pour 2018, les taux d'activité par milieu (41,3 % en "
+                      "urbain, 46,0 % en rural) sont ceux de l'annuaire 2018 (tableau 9). Les autres valeurs 2017 "
+                      "et 2018 n'ont pas pu être rapprochées d'un tableau publié, "
                       "et les évolutions depuis 2017 sont à lire avec cette réserve.")
 NOTE_CARTE_EFFECTIFS = ("La carte colore des valeurs absolues : une province plus peuplée ou plus étendue a "
                         "mécaniquement des valeurs plus élevées. Pour comparer des intensités, il faudrait "
@@ -1544,8 +1547,8 @@ elif st.session_state.page == "Marche de Travail":
             "Âge": ["15-24", "25-34", "35-44", "45 et plus", "Total"],
             "2017-Urbain": [16.4, 55.8, 56.3, 39.8, 41.8],
             "2017-Rural": [18.5, 54.5, 61.2, 46.9, 45.7],
-            "2018-Urbain": [19.3, 53.3, 56.1, 39.7, 41.6],
-            "2018-Rural": [25.4, 54.5, 60.4, 45.7, 45],
+           "2018-Urbain": [19.3, 53.3, 56.1, 39.7, 41.3],
+            "2018-Rural": [25.4, 54.5, 60.4, 45.7, 46.0],
             "2019-Urbain": [19.4, 56.5, 57.1, 39, 42.6],
             "2019-Rural": [22, 53.6, 59.9, 43.3, 43.5],
             "2020-Urbain": [16.4, 55.7, 57.2, 38, 41.5],
@@ -3309,7 +3312,7 @@ elif st.session_state.page == "Habitat":
         custom_palette = ["#5B5EA6", "#9E7B4C", "#B7415E", "#6B8E23", "#C49BBB", "#88B0AC"]
 
         # --- Opérations en cours d'exécution (annuaire statistique régional 2017, Habitat) ---
-        df_ops_execution = pd.DataFrame({
+        data_ops_execution = {
             "Province": ["Agadir Ida Outanane", "Inezgane Ait Melloul", "Chtouka Ait Baha", "Taroudant", "Tiznit",
                          "Tata"],
             "Nbre d'unités": [6662, 3283, 5841, 2050, 797, None],
@@ -3321,7 +3324,8 @@ elif st.session_state.page == "Habitat":
             "Logements (autres unités)": [4416, 1228, 100, 96, 111, None],
             "Activités et Zones Industrielles": [736, 317, 557, 1104, 14, None],
             "Cout en Millions de DH": [2121, 517, 973, 475, 38, None]
-        })
+        }
+        df_ops_execution = pd.DataFrame(data_ops_execution)
 
         # ================== Visualisation individuelle ==================
         col1, col2, col3 = st.columns([1, 3, 1])

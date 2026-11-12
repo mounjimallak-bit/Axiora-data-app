@@ -395,6 +395,7 @@ COPY_OF = {
     "app.py:data_ops_lancement": "hcpdata/habitat/operations_lancement",
     "app.py:habitat_data/Opérations en lancement": "hcpdata/habitat/operations_lancement",
     "app.py:habitat_data/Opérations en exécution": "hcpdata/habitat/operations_execution",
+    "app.py:data_ops_execution": "hcpdata/habitat/operations_execution",
     "app.py:data_ops_etude": "hcpdata/habitat/operations_etude",
     "app.py:habitat_data/Opérations en étude": "hcpdata/habitat/operations_etude",
     "app.py:data_2018#4": "hcpdata/enseignement/personnel_enseignant_sexe/2018",

@@ -9,29 +9,29 @@ validate_data.py checks shapes, totals, missing values and territorial names.
 ASR = "HCP, Annuaire statistique régional Souss-Massa"
 
 SOURCES = {
-    "pauvrete": "HCP Souss-Massa, Évolution des indicateurs de pauvreté 2004, 2007 et 2014 (une fiche par province ou préfecture)",
-    "population/division_administrative": f"{ASR} 2017 et 2018, chapitre Population",
+    "pauvrete": "HCP Souss-Massa, Évolution des indicateurs de pauvreté 2004, 2007 et 2014 (une fiche par province ou préfecture), https://www.hcp.ma/region-agadir/Evolution-des-indicateurs-de-pauvrete-2004-2007-et-2014_a73.html",
+    "population/division_administrative": f"{ASR} 2017 et 2018, Population, tableau 1",
     "population/population_legale": f"{ASR} 2017, Population, tableau 2 (RGPH 2004 et 2014)",
     "population/estimations_population_milieu": f"{ASR} 2017 et 2018, Population, tableau 3",
     "population/evolution_population_age": f"{ASR} 2017 et 2018, Population, tableau 4",
-    "population/estimation_nombre_menages": f"{ASR} 2017 (2014) et 2018 (2018), Population",
+    "population/estimation_nombre_menages": f"{ASR} 2017 (2014) et 2018 (2018), Population, tableau 5",
     "marche_du_travail/activite_par_age_milieu": "HCP, Enquête nationale sur l'emploi 2017 à 2020, résultats régionaux",
     "marche_du_travail/taux_activite_instruction": "HCP, Enquête nationale sur l'emploi 2017 à 2020, résultats régionaux",
     "marche_du_travail/taux_emploi_sexe_milieu": "HCP, Enquête nationale sur l'emploi 2017 à 2020, résultats régionaux",
     "marche_du_travail/taux_chomage_par_province": f"{ASR} 2016, Emploi, tableau 2 (ENE 2016)",
     "marche_du_travail/population_chomage_age_milieu": f"{ASR} 2016, Emploi, tableau 3 (ENE 2016)",
-    "marche_du_travail/taux_chomage_diplome_milieu": f"{ASR} 2016, Emploi (ENE 2016)",
-    "marche_du_travail/population_active_occupee_age": f"{ASR} 2016, Emploi (ENE 2016)",
-    "marche_du_travail/population_active_occupee_sexe": f"{ASR} 2016, Emploi (ENE 2016)",
-    "marche_du_travail/population_active_occupee_secteurs": f"{ASR} 2016, Emploi (ENE 2016)",
-    "marche_du_travail/population_active_occupee_statut": f"{ASR} 2016, Emploi (ENE 2016)",
+    "marche_du_travail/taux_chomage_diplome_milieu": f"{ASR} 2016, Emploi, tableau 5 (ENE 2016)",
+    "marche_du_travail/population_active_occupee_age": f"{ASR} 2016, Emploi, tableau 6 (ENE 2016)",
+    "marche_du_travail/population_active_occupee_sexe": f"{ASR} 2016, Emploi, tableau 7 (ENE 2016)",
+    "marche_du_travail/population_active_occupee_secteurs": f"{ASR} 2016, Emploi, tableau 8 (ENE 2016)",
+    "marche_du_travail/population_active_occupee_statut": f"{ASR} 2016, Emploi, tableau 9 (ENE 2016)",
     "habitat": f"{ASR} 2017, Habitat, tableaux 1 à 4",
-    "finance": f"{ASR} 2017, chapitres Finances et Économie",
+    "finance": f"{ASR} 2017, Finances, tableaux 2 à 6, et Économie, tableau 9 (PIB)",
     "enseignement/nouveaux_inscrits_annee_1": f"{ASR} 2017 et 2018, Enseignement, tableau 6",
     "enseignement/personnel_enseignant_sexe": f"{ASR} 2017 et 2018, Enseignement, tableau 7",
     "enseignement/eleves_primaire_public_par_niveau": f"{ASR} 2017 et 2018, Enseignement, tableau 11",
     "sante": f"{ASR} 2017, Santé, tableaux 1 et 2",
-    "tourisme": f"{ASR} 2017, Tourisme, tableau 3",
+    "tourisme": f"{ASR} 2017, Tourisme, tableau 3 (TOTAL columns: sum of the six provinces, computed here; the yearbook prints no regional total)",
     "énergie": f"{ASR} 2017 et 2018, Énergie et Mines, tableaux 2, 5 et 6",
 }
 
@@ -42,6 +42,10 @@ SOURCES = {
 #   Filles 1 905 and Total 3 826 (regional total 58 639): kept as published.
 #   finance/projets_investissement_2017, Total row: the 2017 yearbook prints 12 793 jobs, 17 960 million DH
 #   and 213 projects, 1 away from the sum of the provinces: kept as published.
+#   tourisme/arrivées_touristes_2017, TOTAL-Arrivees and TOTAL-Nuitees: not printed in the yearbook;
+#   computed here as the sum of the six provinces.
+#   marche_du_travail/activite_par_age_milieu, Total row, 2018: the 2018 yearbook (Emploi, table 9)
+#   prints 41.3 (urban) and 46.0 (rural); the yearbook values are used.
 
 hcp_data = {
     "pauvrete": {
@@ -169,8 +173,8 @@ hcp_data = {
             "Âge": ["15-24", "25-34", "35-44", "45 et plus", "Total"],
             "2017-Urbain": [16.4, 55.8, 56.3, 39.8, 41.8],
             "2017-Rural": [18.5, 54.5, 61.2, 46.9, 45.7],
-            "2018-Urbain": [19.3, 53.3, 56.1, 39.7, 41.6],
-            "2018-Rural": [25.4, 54.5, 60.4, 45.7, 45],
+            "2018-Urbain": [19.3, 53.3, 56.1, 39.7, 41.3],
+            "2018-Rural": [25.4, 54.5, 60.4, 45.7, 46.0],
             "2019-Urbain": [19.4, 56.5, 57.1, 39, 42.6],
             "2019-Rural": [22, 53.6, 59.9, 43.3, 43.5],
             "2020-Urbain": [16.4, 55.7, 57.2, 38, 41.5],
@@ -622,6 +626,12 @@ hcp_data = {
                     "Butane (tonne)": 36231,
                     "Essence super S+O (m³)": 7444,
                     "Gasoil 50 (m³)": 45084
+                },
+                "Tata": {
+                    "Propane (tonne)": None,
+                    "Butane (tonne)": None,
+                    "Essence super S+O (m³)": None,
+                    "Gasoil 50 (m³)": None
                 }
             }
         }

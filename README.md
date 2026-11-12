@@ -21,8 +21,10 @@ exploring the data.
 The HCP publishes regional statistics mainly as PDF yearbooks and spreadsheets, which makes
 comparisons across years and territories slow and error-prone. This project:
 
-1. **transcribes 48 HCP tables** for the six provinces and prefectures of Souss-Massa into a single
-   Python module (`hcpdata.py`), each with the publication it comes from;
+1. **transcribes 48 HCP tables** on the Souss-Massa region into a single Python module (`hcpdata.py`):
+   29 broken down by province, prefecture or commune and 19 at regional level or partial, drawn from
+   the 2016–2018 regional yearbooks, the ENE 2017–2020 results and the 2004/2007/2014 poverty sheets,
+   each with the publication it comes from;
 2. **validates them automatically** (`validate_data.py`), with a test suite showing that typical
    transcription errors are detected (`test_validate_data.py`);
 3. **answers a descriptive research question** with a reproducible script (`analyse_pauvrete.py`):
@@ -42,6 +44,8 @@ comparisons across years and territories slow and error-prone. This project:
 | National employment survey (ENE), regional results | 2017–2020 | activity and employment rates |
 | *Evolution des indicateurs de pauvreté* (one sheet per province or prefecture) | 2004, 2007, 2014 | poverty and vulnerability rates by commune |
 | HCP administrative boundaries (ADM2, ADM3) | 2023 edition | provincial and commune maps |
+
+The regional yearbooks can be downloaded from the HCP Souss-Massa website, https://www.hcp.ma/region-agadir/.
 
 The source of every table is recorded in `SOURCES` in `hcpdata.py`, and each page of the
 application states its own. The tables cover nine themes; the application's dashboards present
@@ -154,9 +158,15 @@ All other modules work without it.
   enrolment in Tiznit, 2018 (1,923 + 1,905 = 3,828 against a total of 3,826), and the Total row of
   the 2017 investment projects table (off by one in three columns).
 - **ENE 2017 to 2020.** The 2019 and 2020 values match the HCP's published ENE indicators, except
-  the rates for people with a diploma, which the HCP publishes split into two levels; the 2017
-  activity rates by setting match the 2017 yearbook; the other 2017 and 2018 values could not be
-  matched to a published table.
+  the rates for people with a diploma, which the HCP publishes split into two levels. For 2017, the
+  activity rates by setting match the 2017 yearbook (Emploi, table 9), and the regional employment
+  rates by sex and activity rates by diploma match the 2018 yearbook (Emploi, tables 4 and 7, which
+  reprint ENE 2017). For 2018, the activity rates by setting are those of the 2018 yearbook (Emploi,
+  table 9: 41.3 % urban, 46.0 % rural). The other 2017 and 2018 values could not be matched to a
+  published table.
+- **Tourist arrivals, 2017.** The yearbook gives the six provinces and prefectures only; the regional
+  total columns are computed here as their sum. This table is used by the assistant only.
+
 
 The application states each of these points under the table concerned.
 
