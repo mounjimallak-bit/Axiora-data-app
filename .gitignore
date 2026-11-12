@@ -16,6 +16,7 @@ env/
 
 # --- Sorties generees a l'execution ---
 temp_plots/
+figures/
 *.pdf
 
 # --- OS ---

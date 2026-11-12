@@ -101,6 +101,7 @@ pip install -r requirements.txt
 
 python validate_data.py            # data checks (exit code 1 if an error is found)
 python test_validate_data.py       # tests of the checks
+python test_app_pages.py           # every page of the app runs without an exception
 python analyse_pauvrete.py --figures   # every number of the case study, and its two box plots
 streamlit run app.py               # the application, at http://localhost:8501
 ```
@@ -166,7 +167,6 @@ All other modules work without it.
   published table.
 - **Tourist arrivals, 2017.** The yearbook gives the six provinces and prefectures only; the regional
   total columns are computed here as their sum. This table is used by the assistant only.
-
 
 The application states each of these points under the table concerned.
 
