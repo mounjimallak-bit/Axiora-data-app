@@ -173,6 +173,7 @@ The application states each of these points under the table concerned.
   intensities would require dividing by the population.
 - The analysis covers Souss-Massa only and is descriptive: it does not identify the causes of the
   territorial differences.
+- Code organisation `app.py` (about 7,400 lines) holds every page in one file, with each page's tables copied inline next to its charts; `validate_data.py` checks every copy value by value against `hcpdata.py`. A modular layout (configuration, shared chart and map components, a PDF service, an assistant service, one module per page) is planned. It must keep the validator's contract, since the validator reads the application's tables as literals rather than running the app.
 
 ---
 

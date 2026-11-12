@@ -111,7 +111,7 @@ st.markdown("""
 section[data-testid="stSidebar"] {
     background-color: #1E293B; /* bleu foncé */
     color: white;
-    padding: 15px;F
+    padding: 15px;
 }
 .stButton>button {
     background-color: transparent;

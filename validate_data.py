@@ -42,10 +42,12 @@ DECIMAL_TOLERANCE = 0.05  # absolute, for values published with decimals
 # values are kept as published and reported as warnings, by name, instead of being hidden by a
 # tolerance.
 KNOWN_DISCREPANCIES = [
-    (r"nouveaux_inscrits_annee_1/2018: Tiznit: Total|Nouveaux inscrits \(1ère année\)/2018: Tiznit: Total",
+    (r"nouveaux_inscrits_annee_1/2018: Tiznit: Total|Nouveaux inscrits \(1ère année\)/2018: Tiznit: Total"
+     r"|Tiznit: Total 2018 = 3826 but Garçons \+ Filles = 3828",
      "Tiznit 2018: Garçons + Filles = 3 828 but Total = 3 826 (and 58 641 vs 58 639 for the region); "
      "as printed in the 2018 regional yearbook, Enseignement, tableau 6"),
-    (r"nouveaux_inscrits_annee_1/2018: Région Souss-Massa: Total|Nouveaux inscrits \(1ère année\)/2018: Région Souss-Massa: Total",
+    (r"nouveaux_inscrits_annee_1/2018: Région Souss-Massa: Total|Nouveaux inscrits \(1ère année\)/2018: Région Souss-Massa: Total"
+     r"|Région Souss-Massa: Total 2018 = 58639 but Garçons \+ Filles = 58641",
      "same discrepancy, carried into the regional row"),
     (r"(projets_investissement_2017|data_projets): row 'Total'",
      "the Total row differs by 1 from the sum of the provinces in three columns; "
@@ -69,16 +71,25 @@ def warn(msg):
 
 # ---------------------------------------------------------------- loading
 def literal_tables(path):
-    """Return {name: dict} for every top-level or nested `x = {...}` literal in a file."""
+    """Return {name: dict} for every top-level or nested `x = {...}` literal in a file.
+
+    The app reuses some variable names on different pages (data, data_2017, data_2018...). Every
+    assignment is kept: in file order, the first keeps its name and the next ones get #2, #3...,
+    so that no copy is silently left unchecked."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
-    out = {}
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Dict) \
-                and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
-            try:
-                out[node.targets[0].id] = ast.literal_eval(node.value)
-            except ValueError:
-                pass
+    nodes = sorted((node for node in ast.walk(tree)
+                    if isinstance(node, ast.Assign) and isinstance(node.value, ast.Dict)
+                    and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)),
+                   key=lambda node: node.lineno)
+    out, seen = {}, {}
+    for node in nodes:
+        try:
+            value = ast.literal_eval(node.value)
+        except ValueError:
+            continue
+        name = node.targets[0].id
+        seen[name] = seen.get(name, 0) + 1
+        out[name if seen[name] == 1 else f"{name}#{seen[name]}"] = value
     return out
 
 
@@ -386,7 +397,9 @@ COPY_OF = {
     "app.py:habitat_data/Opérations en exécution": "hcpdata/habitat/operations_execution",
     "app.py:data_ops_etude": "hcpdata/habitat/operations_etude",
     "app.py:habitat_data/Opérations en étude": "hcpdata/habitat/operations_etude",
+    "app.py:data_2018#4": "hcpdata/enseignement/personnel_enseignant_sexe/2018",
 }
+
 
 
 def _years(name):
