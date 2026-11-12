@@ -1,5 +1,7 @@
 # Axiora Data
 
+[![checks](https://github.com/mounjimallak-bit/Axiora-data-app/actions/workflows/checks.yml/badge.svg)](https://github.com/mounjimallak-bit/Axiora-data-app/actions/workflows/checks.yml)
+
 A validated dataset of official statistics for the Souss-Massa region of Morocco, a reproducible
 descriptive analysis of poverty change between 2004 and 2014, and an interactive application for
 exploring the data.
