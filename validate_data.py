@@ -42,14 +42,15 @@ DECIMAL_TOLERANCE = 0.05  # absolute, for values published with decimals
 # values are kept as published and reported as warnings, by name, instead of being hidden by a
 # tolerance.
 KNOWN_DISCREPANCIES = [
-    (r"nouveaux_inscrits_annee_1/2018: Tiznit: Total|Nouveaux inscrits \(1ère année\)/2018: Tiznit: Total"
-     r"|Tiznit: Total 2018 = 3826 but Garçons \+ Filles = 3828",
+    (r"Tiznit: Total( 2018)? = 3826 but Garçons \+ Filles = 3828$",
      "Tiznit 2018: Garçons + Filles = 3 828 but Total = 3 826 (and 58 641 vs 58 639 for the region); "
      "as printed in the 2018 regional yearbook, Enseignement, tableau 6"),
-    (r"nouveaux_inscrits_annee_1/2018: Région Souss-Massa: Total|Nouveaux inscrits \(1ère année\)/2018: Région Souss-Massa: Total"
-     r"|Région Souss-Massa: Total 2018 = 58639 but Garçons \+ Filles = 58641",
+    (r"Région Souss-Massa: Total( 2018)? = 58639 but Garçons \+ Filles = 58641$",
      "same discrepancy, carried into the regional row"),
-    (r"(projets_investissement_2017|data_projets): row 'Total'",
+    (r"(projets_investissement_2017|data_projets): row 'Total' column "
+     r"('Emplois à créer' = 12793 but the other rows sum to 12794"
+     r"|'Montant d'investissement \(millions de DH\)' = 17960 but the other rows sum to 17959"
+     r"|'Nombre de projets' = 213 but the other rows sum to 212)$",
      "the Total row differs by 1 from the sum of the provinces in three columns; "
      "as printed in the 2017 regional yearbook, Finances"),
 ]
