@@ -108,9 +108,11 @@ python analyse_pauvrete.py --figures   # every number of the case study, and its
 streamlit run app.py               # the application, at http://localhost:8501
 ```
 
-Tested with Python 3.13 and streamlit 1.66.1, pandas 3.1.1, numpy 2.5.4, plotly 5.24.1,
-geopandas 1.2.0, google-generativeai 0.8.6, fpdf 1.7.2, matplotlib 3.11.2, openpyxl 3.1.5,
-Pillow 13.0.0.
+`requirements.txt` pins every dependency: streamlit 1.66.1, pandas 3.1.1, numpy 2.4.6,
+plotly 5.24.1, geopandas 1.2.0, google-generativeai 0.8.6, fpdf 1.7.2, matplotlib 3.11.2,
+openpyxl 3.1.5, Pillow 13.0.0. The checks, the analysis and every page of the application run
+with these versions on Python 3.11, 3.12 and 3.13, with identical results (numpy 2.5 would
+require Python 3.12 or later).
 
 The assistant needs a Google Gemini API key in `.streamlit/secrets.toml` (not versioned):
 
