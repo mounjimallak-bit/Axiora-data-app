@@ -208,6 +208,14 @@ Axiora-data-app/
 ```
 
 ---
+## License
+
+The code is released under the MIT License (see `LICENSE`). The statistical tables in
+`hcpdata.py` are transcribed from publications of the Haut-Commissariat au Plan, and the
+boundary files in `mar_admbnda_adm2_hcp_20230925/` and `mar_admbnda_adm3_hcp_20230925/` come
+with their own terms of use (see their metadata); these data remain under their sources'
+terms and are not covered by the MIT License.
+
 
 ## Author
 
